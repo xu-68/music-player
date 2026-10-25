@@ -269,21 +269,28 @@ actor AudioImporter {
                     continue
                 } else { snapshot.tracks.append(track); report.imported += 1 }
                 let stem = url.deletingPathExtension().lastPathComponent
-                let candidates = urls.filter { $0.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(stem) == .orderedSame }
+                let sourceDirectory = url.deletingLastPathComponent().standardizedFileURL
+                let candidates = urls.filter {
+                    $0.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(stem) == .orderedSame &&
+                    $0.deletingLastPathComponent().standardizedFileURL == sourceDirectory
+                }
                 for ext in ["ttml", "xml", "lrc"] {
                     if let sidecar = candidates.first(where: { $0.pathExtension.lowercased() == ext }),
                        await attachLyrics(sidecar, for: track.id) { break }
                 }
                 if let video = urls.first(where: {
                     ["mp4", "mov", "m4v"].contains($0.pathExtension.lowercased()) &&
-                    ($0.deletingPathExtension().lastPathComponent == stem && $0 != url ||
-                     $0.deletingLastPathComponent().lastPathComponent == "anim" && $0.deletingPathExtension().lastPathComponent == Self.safeAlbumName(track.album))
+                    ($0.deletingPathExtension().lastPathComponent == stem && $0 != url && $0.deletingLastPathComponent().standardizedFileURL == sourceDirectory ||
+                     $0.deletingLastPathComponent().lastPathComponent == "anim" && $0.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL == sourceDirectory && $0.deletingPathExtension().lastPathComponent == Self.safeAlbumName(track.album))
                 }) { await importVideo(video, for: track.id) }
             } catch { report.failures.append("\(url.lastPathComponent)：\(error.localizedDescription)") }
         }
         for sidecar in urls where ["ttml", "xml", "lrc"].contains(sidecar.pathExtension.lowercased()) {
             let stem = sidecar.deletingPathExtension().lastPathComponent
-            for track in tracks where (track.originalFilename as NSString?)?.deletingPathExtension == stem {
+            let matches = snapshot.tracks.filter { ($0.originalFilename as NSString?)?.deletingPathExtension == stem }
+            let siblings = matches.filter { $0.sourceDirectory == sidecar.deletingLastPathComponent().path }
+            let targets = siblings.isEmpty && folderID == nil && matches.count == 1 ? matches : siblings
+            for track in targets {
                 if sidecar.pathExtension.lowercased() == "lrc", let name = track.lyricsFilename, ["ttml", "xml"].contains((name as NSString).pathExtension) { continue }
                 _ = await attachLyrics(sidecar, for: track.id)
             }

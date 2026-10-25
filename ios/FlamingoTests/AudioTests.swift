@@ -53,8 +53,19 @@ final class AudioTests: XCTestCase {
         let asset = AVURLAsset(url: LibraryPaths.video.appending(path: videoName))
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
         XCTAssertFalse(videoTracks.isEmpty)
+        let alternate = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "alternate", withExtension: "flac"))
+        let first = folder.appending(path: "First", directoryHint: .isDirectory)
+        let second = folder.appending(path: "Second", directoryHint: .isDirectory)
+        for directory in [first, second] { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true) }
+        try FileManager.default.copyItem(at: input, to: first.appending(path: "same.flac"))
+        try FileManager.default.copyItem(at: alternate, to: second.appending(path: "same.flac"))
+        try "[00:00]First folder lyric".write(to: first.appending(path: "same.lrc"), atomically: true, encoding: .utf8)
+        try "[00:00]Second folder lyric".write(to: second.appending(path: "same.lrc"), atomically: true, encoding: .utf8)
+        await library.refreshFolders()
+        let alternateTrack = try XCTUnwrap(library.snapshot.tracks.first { $0.originalFilename == "same.flac" && $0.sourceDirectory?.hasSuffix("/Second") == true })
+        XCTAssertEqual(library.lyrics(for: alternateTrack).first?.text, "Second folder lyric")
         for entry in library.snapshot.folders where entry.name == folder.lastPathComponent { library.removeFolder(entry.id) }
-        library.deleteTrack(track.id); await library.saveNow()
+        library.deleteTrack(track.id); library.deleteTrack(alternateTrack.id); await library.saveNow()
     }
     func testExtendedAudioFormatsDecodeToPlayablePCM() async throws {
         let folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
