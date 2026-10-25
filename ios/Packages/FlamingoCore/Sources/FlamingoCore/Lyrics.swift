@@ -30,6 +30,13 @@ public struct LyricLine: Identifiable, Equatable, Sendable {
 }
 
 public enum LyricsParser {
+    public static func preferred(embedded: String?, sidecar: String?, manual: Bool = false) -> [LyricLine] {
+        func xml(_ value: String) -> Bool { value.trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{feff}"))).hasPrefix("<") }
+        let inputs = [embedded, sidecar].compactMap { $0 }
+        let ordered = manual ? [sidecar, embedded].compactMap { $0 } : inputs.filter(xml) + inputs.filter { !xml($0) }
+        for input in ordered { let lines = parse(input); if !lines.isEmpty { return lines } }
+        return []
+    }
     public static func parse(_ text: String) -> [LyricLine] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.range(of: "<!DOCTYPE", options: .caseInsensitive) == nil else { return [] }

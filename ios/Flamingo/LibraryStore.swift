@@ -333,10 +333,11 @@ actor AudioImporter {
         } catch { errorMessage = "动态封面导入失败：\(error.localizedDescription)" }
     }
     func importLyrics(_ url: URL, for id: UUID) async {
-        if !(await attachLyrics(url, for: id)) { errorMessage = "未能解析歌词，请选择 UTF-8 或 UTF-16 编码的 LRC / TTML 文件。" }
+        if !(await attachLyrics(url, for: id, manually: true)) { errorMessage = "未能解析歌词，请选择 UTF-8 或 UTF-16 编码的 LRC / TTML 文件。" }
     }
-    @discardableResult private func attachLyrics(_ url: URL, for id: UUID) async -> Bool {
+    @discardableResult private func attachLyrics(_ url: URL, for id: UUID, manually: Bool = false) async -> Bool {
         guard ready, let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return false }
+        if !manually && snapshot.tracks[i].manualLyrics == true { return false }
         let granted = url.startAccessingSecurityScopedResource()
         defer { if granted { url.stopAccessingSecurityScopedResource() } }
         do {
@@ -348,14 +349,16 @@ actor AudioImporter {
             let name = id.uuidString + "." + url.pathExtension.lowercased()
             try data.write(to: LibraryPaths.lyrics.appending(path: name), options: .atomic)
             snapshot.tracks[i].lyricsFilename = name
+            snapshot.tracks[i].manualLyrics = manually
             scheduleSave()
             return true
         } catch { return false }
     }
     func lyrics(for track: Track) -> [LyricLine] {
+        var sidecar: String?
         if let name = track.lyricsFilename, let data = try? Data(contentsOf: LibraryPaths.lyrics.appending(path: name)),
-           let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16) { return LyricsParser.parse(text) }
-        return track.embeddedLyrics.map(LyricsParser.parse) ?? []
+           let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16) { sidecar = text }
+        return LyricsParser.preferred(embedded: track.embeddedLyrics, sidecar: sidecar, manual: track.manualLyrics == true)
     }
     func toggleFavorite(_ id: UUID) {
         guard ready, let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return }

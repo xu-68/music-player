@@ -106,6 +106,14 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(LyricsParser.activeIndices(in: lines, at: 5), [])
         XCTAssertEqual(LyricsParser.parse("[00:01]v2:Duet")[0].agent, "v2")
     }
+    func testLyricSourcePriorityAndManualOverride() {
+        let xml = #"<tt><body><p begin="1s" end="3s">Embedded TTML</p></body></tt>"#
+        let lrc = "[00:01]External LRC"
+        XCTAssertEqual(LyricsParser.preferred(embedded: xml, sidecar: lrc).first?.text, "Embedded TTML")
+        XCTAssertEqual(LyricsParser.preferred(embedded: lrc, sidecar: xml).first?.text, "Embedded TTML")
+        XCTAssertEqual(LyricsParser.preferred(embedded: "<tt><broken>", sidecar: lrc).first?.text, "External LRC")
+        XCTAssertEqual(LyricsParser.preferred(embedded: xml, sidecar: lrc, manual: true).first?.text, "External LRC")
+    }
     func testQueueReorderRoundTripAndMoveNext() throws {
         let ids = (0..<5).map { _ in UUID() }
         var queue = PlaybackQueue(); queue.replace(with: ids, startingAt: 2)

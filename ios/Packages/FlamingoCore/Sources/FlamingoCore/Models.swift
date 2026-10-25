@@ -9,6 +9,7 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
     public var filename: String
     public var artworkFilename: String?
     public var lyricsFilename: String?
+    public var manualLyrics: Bool?
     public var embeddedLyrics: String?
     public var duration: Double
     public var trackNumber: Int
