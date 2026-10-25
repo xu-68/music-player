@@ -1,0 +1,38 @@
+name: iOS Native Build
+on:
+  workflow_dispatch:
+  push:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Record toolchain
+        run: xcodebuild -version
+      - name: Core and UI tests
+        run: bash ios/scripts/build.sh test
+      - name: Build unsigned device IPA
+        run: bash ios/scripts/build.sh unsigned
+      - name: Verify ARM64 iOS package
+        run: python3 ios/scripts/verify_ipa.py ios/Build/Flamingo-unsigned.ipa
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flamingo-unsigned-ipa
+          path: ios/Build/Flamingo-unsigned.ipa
+          if-no-files-found: error
+      - name: Upload test results and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flamingo-test-results
+          path: ios/Build/*.xcresult
+          if-no-files-found: warn

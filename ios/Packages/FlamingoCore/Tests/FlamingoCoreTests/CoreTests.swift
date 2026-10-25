@@ -1,0 +1,130 @@
+import XCTest
+@testable import FlamingoCore
+
+final class CoreTests: XCTestCase {
+    func testLRCFractionsTranslationsAndOffset() {
+        let lines = LyricsParser.parse("[offset:-200]\n[00:01.250]Hello\n[00:01.250]你好\n[00:05]World\n[00:09.500]")
+        XCTAssertEqual(lines.count, 3)
+        XCTAssertEqual(lines[0].start, 1.05, accuracy: 0.0001)
+        XCTAssertEqual(lines[0].translation, "你好")
+        XCTAssertEqual(lines[0].end, 4.8)
+        XCTAssertNil(LyricsParser.activeIndex(in: lines, at: 0))
+        XCTAssertEqual(LyricsParser.activeIndex(in: lines, at: 4.8), 1)
+        XCTAssertNil(LyricsParser.activeIndex(in: lines, at: .nan))
+    }
+    func testRepeatedTimestampsAndWordTiming() {
+        let repeated = LyricsParser.parse("[00:01][00:03]Chorus")
+        XCTAssertEqual(repeated.map(\.start), [1, 3])
+        let enhanced = LyricsParser.parse("[00:01.00]Hello <00:01.50>world<00:02.00>\n[00:04]Next")
+        XCTAssertEqual(enhanced[0].text, "Hello world")
+        XCTAssertEqual(enhanced[0].words.map(\.start), [1, 1.5])
+        XCTAssertEqual(enhanced[0].words[1].end, 2)
+        let square = LyricsParser.parse("[00:01]你[00:02]好[00:03]")
+        XCTAssertEqual(square[0].words.map(\.text), ["你", "好"])
+    }
+    func testTTMLWordsEntitiesAndTranslation() {
+        let xml = #"<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata"><body><div><p begin="00:01.000" end="00:05.000"><span begin="00:01.000" end="00:02.000">Hello </span><span begin="00:02.000" end="00:04.000">&amp; world</span><span ttm:role="x-translation">你好，世界</span></p><p begin="00:05.000" dur="2s">Next</p></div></body></tt>"#
+        let lines = LyricsParser.parse(xml)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertEqual(lines[0].text, "Hello & world")
+        XCTAssertEqual(lines[0].translation, "你好，世界")
+        XCTAssertEqual(lines[0].words.count, 2)
+        XCTAssertEqual(lines[0].words.last?.start, 2)
+        XCTAssertEqual(lines[1].end, 7)
+    }
+    func testTTMLOffsetDurationsAndMalformedInput() {
+        let xml = #"<tt xmlns="http://www.w3.org/ns/ttml"><body begin="2s"><div><p begin="1s" dur="3s"><span begin="0s" dur="1s">First</span><br/>line</p></div></body></tt>"#
+        let lines = LyricsParser.parse(xml)
+        XCTAssertEqual(lines.first?.start, 3)
+        XCTAssertEqual(lines.first?.end, 6)
+        XCTAssertEqual(lines.first?.text, "First\nline")
+        XCTAssertTrue(LyricsParser.parse("<tt><broken>").isEmpty)
+        XCTAssertTrue(LyricsParser.parse("No timestamps").isEmpty)
+    }
+    func testQueueEndRepeatAndManualNext() {
+        let ids = [UUID(), UUID(), UUID()]
+        var queue = PlaybackQueue()
+        queue.replace(with: ids)
+        XCTAssertEqual(queue.current?.trackID, ids[0])
+        queue.repeatMode = .one
+        XCTAssertTrue(queue.advance(automatic: true))
+        XCTAssertEqual(queue.current?.trackID, ids[0])
+        XCTAssertTrue(queue.advance())
+        XCTAssertEqual(queue.current?.trackID, ids[1])
+        XCTAssertTrue(queue.advance())
+        XCTAssertFalse(queue.advance())
+        queue.repeatMode = .all
+        XCTAssertTrue(queue.advance(automatic: true))
+        XCTAssertEqual(queue.current?.trackID, ids[0])
+        XCTAssertTrue(queue.previous())
+        XCTAssertEqual(queue.current?.trackID, ids[2])
+    }
+    func testShufflePreservesCurrentAndRestoresOrder() {
+        let ids = (0..<20).map { _ in UUID() }
+        var queue = PlaybackQueue(); queue.replace(with: ids, startingAt: 5)
+        let current = queue.current
+        queue.toggleShuffle()
+        XCTAssertEqual(queue.current, current)
+        XCTAssertEqual(Set(queue.entries.map(\.trackID)), Set(ids))
+        XCTAssertEqual(Array(queue.entries.prefix(6).map(\.trackID)), Array(ids.prefix(6)))
+        queue.toggleShuffle()
+        XCTAssertEqual(queue.entries.map(\.trackID), ids)
+        XCTAssertEqual(queue.current, current)
+    }
+    func testQueueDuplicateTracksAndSafeRemoval() {
+        let id = UUID()
+        var queue = PlaybackQueue(); queue.replace(with: [id, id])
+        XCTAssertNotEqual(queue.entries[0].id, queue.entries[1].id)
+        let currentID = queue.current!.id
+        queue.remove(currentID)
+        XCTAssertEqual(queue.entries.count, 2)
+        queue.insert(UUID(), next: true)
+        XCTAssertEqual(queue.upcoming.count, 2)
+        queue.remove(queue.upcoming[0].id)
+        XCTAssertEqual(queue.current?.id, currentID)
+        queue.replace(with: [], startingAt: 99)
+        XCTAssertNil(queue.current); XCTAssertFalse(queue.advance()); XCTAssertFalse(queue.previous())
+    }
+    func testStartingShuffleRetainsEverySongInUpcomingQueue() {
+        let ids = (0..<10).map { _ in UUID() }
+        var queue = PlaybackQueue()
+        queue.replace(with: ids, startingAt: 7, shuffled: true)
+        XCTAssertEqual(queue.current?.trackID, ids[7])
+        XCTAssertEqual(queue.upcoming.count, 9)
+        XCTAssertEqual(Set(queue.upcoming.map(\.trackID)), Set(ids.filter { $0 != ids[7] }))
+        queue.toggleShuffle()
+        XCTAssertEqual(queue.entries.map(\.trackID), ids)
+        XCTAssertEqual(queue.current?.trackID, ids[7])
+    }
+    func testDeletingTrackPreservesSurvivingQueueAndRemovesDuplicates() {
+        let a = UUID(), b = UUID(), c = UUID(), d = UUID()
+        var queue = PlaybackQueue()
+        queue.replace(with: [a, b, a, c, d], startingAt: 1)
+        let currentEntry = queue.current?.id
+        queue.removeTrack(a)
+        XCTAssertEqual(queue.entries.map(\.trackID), [b, c, d])
+        XCTAssertEqual(queue.current?.id, currentEntry)
+        queue.removeTrack(b)
+        XCTAssertEqual(queue.current?.trackID, c)
+        queue.removeTrack(d)
+        queue.removeTrack(c)
+        XCTAssertTrue(queue.entries.isEmpty)
+        XCTAssertNil(queue.current)
+    }
+    func testLibraryRoundTripAndLabels() throws {
+        var snapshot = LibrarySnapshot()
+        let track = Track(title: "歌曲", artist: "艺人", album: "专辑", filename: "track.flac", isFavorite: true)
+        snapshot.tracks = [track]
+        snapshot.playlists = [.init(name: "我的歌单", trackIDs: [track.id])]
+        snapshot.sessions = [.init(trackID: track.id, seconds: 12.3)]
+        let decoded = try JSONDecoder().decode(LibrarySnapshot.self, from: JSONEncoder().encode(snapshot))
+        XCTAssertEqual(decoded.tracks, [track])
+        XCTAssertEqual(decoded.playlists[0].trackIDs, [track.id])
+        XCTAssertEqual(decoded.sessions[0].seconds, 12.3)
+        XCTAssertTrue(track.isLossless); XCTAssertTrue(track.matches("歌曲")); XCTAssertFalse(track.matches("missing"))
+        XCTAssertEqual(PlaybackTime.label(-10), "0:00")
+        XCTAssertEqual(PlaybackTime.label(.infinity), "0:00")
+        XCTAssertEqual(PlaybackTime.label(125.8), "2:05")
+        XCTAssertFalse(PlaybackTime.label(.greatestFiniteMagnitude).isEmpty)
+    }
+}
