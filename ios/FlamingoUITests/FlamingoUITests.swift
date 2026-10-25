@@ -127,6 +127,13 @@ final class FlamingoUITests: XCTestCase {
         capture("12-album-detail")
     }
     private func capture(_ name: String) {
+        // Existence checks can pass during the native navigation push. Capture
+        // after its transition settles, and verify that the dock remains usable.
+        if app.buttons["mini-player"].exists {
+            let usable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
+            XCTAssertEqual(XCTWaiter.wait(for: [usable], timeout: 5), .completed)
+        }
+        Thread.sleep(forTimeInterval: 0.7)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
     }
