@@ -116,7 +116,8 @@ struct NowPlayingView: View {
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button { if let track = player.current { library.toggleFavorite(track.id) } } label: {
                 Image(systemName: player.current?.isFavorite == true ? "star.fill" : "star")
-                    .font(.system(size: 18, weight: .semibold)).frame(width: 34, height: 44)
+                    .font(.system(size: 18, weight: .semibold)).frame(width: 32, height: 32)
+                    .background(.white.opacity(0.12), in: Circle()).frame(width: 44, height: 44)
             }.buttonStyle(PressStyle()).accessibilityLabel(player.current?.isFavorite == true ? "取消收藏" : "收藏")
             Menu {
                 if let track = player.current { TrackActions(track: track) }

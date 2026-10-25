@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 enum MusicTab: String, CaseIterable {
     case home = "主页", library = "资料库", stats = "统计"
-    var symbol: String { switch self { case .home: return "music.note"; case .library: return "square.stack.fill"; case .stats: return "chart.xyaxis.line" } }
+    var symbol: String { switch self { case .home: return "music.note"; case .library: return "square.stack.fill"; case .stats: return "chart.line.uptrend.xyaxis" } }
 }
 
 struct RootView: View {
@@ -54,7 +54,10 @@ struct RootView: View {
                         ForEach(MusicTab.allCases, id: \.self) { item in
                             Button { tab = item } label: {
                                 VStack(spacing: 4) {
-                                    Image(systemName: item.symbol).font(.system(size: 23, weight: .medium)).frame(height: 26)
+                                    Image(systemName: item.symbol).font(.system(size: 23, weight: .medium))
+                                        .overlay {
+                                            if item == .library { Image(systemName: "music.note").font(.system(size: 12, weight: .semibold)).offset(y: 2).blendMode(.destinationOut) }
+                                        }.compositingGroup().frame(height: 26)
                                     Text(item.rawValue).font(.system(size: 10, weight: .medium))
                                 }.foregroundStyle(tab == item ? MusicDesign.accent : Color.secondary)
                                     .frame(maxWidth: .infinity).frame(height: 49).contentShape(Rectangle())
