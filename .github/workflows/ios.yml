@@ -17,8 +17,9 @@ jobs:
         run: brew install xcodegen
       - name: Record toolchain
         run: xcodebuild -version
-      - name: Core and UI tests
-        run: bash ios/scripts/build.sh test
+      - name: Core unit tests
+        working-directory: ios/Packages/FlamingoCore
+        run: swift test
       - name: Build unsigned device IPA
         run: bash ios/scripts/build.sh unsigned
       - name: Verify ARM64 iOS package
@@ -29,10 +30,31 @@ jobs:
           name: Flamingo-unsigned-ipa
           path: ios/Build/Flamingo-unsigned.ipa
           if-no-files-found: error
+  ui-tests:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Simulator UI and playback tests
+        run: bash ios/scripts/build.sh ui-test
+      - name: Export native screenshots
+        if: always()
+        shell: bash
+        run: |
+          for result in ios/Build/*.xcresult; do
+            if [[ -d "$result" ]]; then
+              xcrun xcresulttool export attachments --path "$result" --output-path "ios/Build/Screenshots/$(basename "$result" .xcresult)"
+            fi
+          done
       - name: Upload test results and screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: Flamingo-test-results
-          path: ios/Build/*.xcresult
+          path: |
+            ios/Build/*.xcresult
+            ios/Build/Screenshots/
           if-no-files-found: warn

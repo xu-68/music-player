@@ -20,8 +20,10 @@ case "$MODE" in
       -destination 'generic/platform=iOS Simulator' -derivedDataPath Build/DerivedData \
       CODE_SIGNING_ALLOWED=NO build
     ;;
-  test)
-    (cd Packages/FlamingoCore && swift test)
+  test|ui-test)
+    if [[ "$MODE" == "test" ]]; then
+      (cd Packages/FlamingoCore && swift test)
+    fi
     if [[ -z "${SIMULATOR_UDID:-}" ]]; then
       SIMULATOR_UDID="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(v["udid"] for k,a in d["devices"].items() if "iOS" in k for v in a if "iPhone" in v["name"] and v.get("isAvailable")))')"
     fi
@@ -53,5 +55,5 @@ case "$MODE" in
     xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath Build/Signed \
       -exportOptionsPlist "$EXPORT_OPTIONS_PLIST" -allowProvisioningUpdates
     ;;
-  *) echo 'Usage: bash scripts/build.sh [simulator|test|unsigned|signed]' >&2; exit 2 ;;
+  *) echo 'Usage: bash scripts/build.sh [simulator|test|ui-test|unsigned|signed]' >&2; exit 2 ;;
 esac
