@@ -53,7 +53,7 @@ struct HomeView: View {
                                 }.frame(maxWidth: .infinity, alignment: featured ? .center : .leading)
                                     .padding(featured ? 14 : 0)
                                     .background {
-                                        if featured { ArtworkView(track: track, radius: 0).blur(radius: 30).overlay(.black.opacity(0.6)).clipped() }
+                                        if featured { ArtworkTint(track: track) }
                                     }
                             }.frame(width: width).background(featured ? Color(uiColor: .secondarySystemBackground) : .clear)
                                 .clipShape(RoundedRectangle(cornerRadius: featured ? 16 : 0, style: .continuous))
@@ -81,7 +81,7 @@ struct HomeView: View {
                                         Text(track.artist).font(.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                                         Text(group.isAlbum ? "\(group.tracks.count) 首歌曲" : track.album).font(.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
                                     }.frame(maxWidth: .infinity).padding(14)
-                                        .background { ArtworkView(track: track, radius: 0).blur(radius: 30).overlay(.black.opacity(0.6)).clipped() }
+                                        .background { ArtworkTint(track: track) }
                                 }.frame(width: width).clipShape(RoundedRectangle(cornerRadius: 14))
                             }.buttonStyle(PressStyle())
                         }
@@ -297,7 +297,7 @@ struct PlaylistDetailView: View {
     private var playlist: Playlist? { library.playlists.first { $0.id == id } }
     private var tracks: [Track] {
         let values = playlist.map(library.tracks(for:)) ?? []
-        let sorted = sort == "最近添加" ? values.sorted { descending ? $0.addedAt < $1.addedAt : $0.addedAt > $1.addedAt } : SongSort(rawValue: sort)?.sorted(values, descending: descending) ?? values
+        let sorted = sort == "最近添加" ? SongSort.modified.sorted(values, descending: descending) : SongSort(rawValue: sort)?.sorted(values, descending: descending) ?? (descending ? Array(values.reversed()) : values)
         return MusicSearch.ranked(sorted, query: query)
     }
     var body: some View {
@@ -318,7 +318,7 @@ struct PlaylistDetailView: View {
                 }
                 value.trackIDs.remove(atOffsets: positions); library.updatePlaylist(value)
             }.onMove { from, to in
-                guard var value = playlist, query.isEmpty, sort == "手动顺序" else { return }
+                guard var value = playlist, query.isEmpty, sort == "手动顺序", !descending else { return }
                 value.trackIDs.move(fromOffsets: from, toOffset: to); library.updatePlaylist(value)
             }
         }.listStyle(.plain).navigationTitle(playlist?.name ?? "歌单")

@@ -77,6 +77,7 @@ final class CoreTests: XCTestCase {
         let data = Data(#"[{"uri":null,"title":null,"artists":null,"album":null,"albumArtists":null,"dayStartMs":0,"timestampMs":0,"listenedMs":1000,"countsAsPlay":true}]"#.utf8)
         let sessions = try ListeningBackup.restore(data, into: [], tracks: [], merge: false)
         XCTAssertEqual(sessions.count, 1); XCTAssertEqual(sessions[0].seconds, 1)
+        XCTAssertEqual(try ListeningBackup.restore(data, into: sessions, tracks: [], merge: true).count, 1)
         let now = Date(timeIntervalSince1970: 100)
         XCTAssertEqual(SleepPlan(mode: .duration, minutes: 1, now: now).deadline, now.addingTimeInterval(60))
         XCTAssertNil(SleepPlan(mode: .endOfTrack).deadline)

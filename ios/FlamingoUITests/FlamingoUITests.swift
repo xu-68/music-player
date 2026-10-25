@@ -119,6 +119,13 @@ final class FlamingoUITests: XCTestCase {
         }, object: progress)
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
     }
+    func testOpenCurrentAlbumFromPlayer() {
+        app.buttons["mini-player"].tap(); app.buttons["更多播放选项"].tap()
+        app.buttons["前往专辑"].tap()
+        XCTAssertTrue(app.navigationBars["沿岸"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["mini-player"].exists)
+        capture("12-album-detail")
+    }
     private func capture(_ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)

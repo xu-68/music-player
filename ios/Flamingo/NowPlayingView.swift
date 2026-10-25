@@ -108,7 +108,11 @@ struct NowPlayingView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(player.current?.title ?? "").font(.system(size: 23, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-                Text(player.current?.artist ?? "").font(.system(size: 21)).foregroundStyle(.white.opacity(0.58)).lineLimit(1)
+                Menu {
+                    if let track = player.current {
+                        ForEach(library.artists(for: track), id: \.self) { name in Button(name) { library.navigationTarget = .artist(name) } }
+                    }
+                } label: { Text(player.current?.artist ?? "").font(.system(size: 21)).foregroundStyle(.white.opacity(0.58)).lineLimit(1) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button { if let track = player.current { library.toggleFavorite(track.id) } } label: {
                 Image(systemName: player.current?.isFavorite == true ? "star.fill" : "star")
@@ -220,6 +224,7 @@ struct LyricsView: View {
     private var activeIndex: Int? { LyricsParser.activeIndex(in: player.lines, at: player.elapsed) }
     private var activeLines: Set<Int> { LyricsParser.activeIndices(in: player.lines, at: player.elapsed) }
     var body: some View {
+        let focused = activeLines
         Group {
             if player.lines.isEmpty {
                 VStack(spacing: 12) {
@@ -233,7 +238,7 @@ struct LyricsView: View {
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 26) {
                                 ForEach(player.lines) { line in
-                                    let active = activeLines.contains(line.id)
+                                    let active = focused.contains(line.id)
                                     let right = line.agent == "v2"
                                     Button {
                                         player.seek(to: line.start); following = true
@@ -243,11 +248,12 @@ struct LyricsView: View {
                                             if line.words.isEmpty {
                                                 if line.text.isEmpty {
                                                     LyricCountdown(line: line, time: player.elapsed, active: active)
-                                                } else { Text(line.text)
+                                                } else { BalancedTextLayout(enabled: balance, right: right) { Text(line.text)
                                                     .font(.system(size: 30, weight: PlayerPreferences.lyricWeight)).tracking(-0.5)
                                                     .foregroundStyle(.white.opacity(active ? 1 : 0.26))
                                                     .multilineTextAlignment(right ? .trailing : .leading)
                                                     .fixedSize(horizontal: false, vertical: true)
+                                                }
                                                 }
                                             } else {
                                                 KaraokeLine(line: line, time: player.elapsed, active: active, reduceMotion: reduceMotion, balanced: balance, weight: weight)
@@ -280,6 +286,31 @@ struct LyricsView: View {
     }
     private func scroll(_ reader: ScrollViewProxy, to id: Int) {
         withAnimation(reduceMotion ? nil : MusicDesign.lyricSpring) { reader.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.32)) }
+    }
+}
+
+private struct BalancedTextLayout: Layout {
+    var enabled: Bool
+    var right: Bool
+    private func width(_ available: CGFloat, view: LayoutSubview) -> CGFloat {
+        guard enabled, view.sizeThatFits(.unspecified).width > available else { return available }
+        let height = view.sizeThatFits(ProposedViewSize(width: available, height: nil)).height
+        var low = available / 3, high = available
+        for _ in 0..<10 {
+            let mid = (low + high) / 2
+            if view.sizeThatFits(ProposedViewSize(width: mid, height: nil)).height <= height + 0.5 { high = mid } else { low = mid }
+        }
+        return high
+    }
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let view = subviews.first else { return .zero }
+        let available = proposal.width ?? 320
+        return CGSize(width: available, height: view.sizeThatFits(ProposedViewSize(width: width(available, view: view), height: nil)).height)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let view = subviews.first else { return }
+        let measured = width(bounds.width, view: view)
+        view.place(at: CGPoint(x: right ? bounds.maxX - measured : bounds.minX, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: measured, height: bounds.height))
     }
 }
 

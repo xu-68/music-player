@@ -33,6 +33,11 @@ struct ImportReport {
     }
 }
 
+enum LibraryDestination: Hashable {
+    case artist(String)
+    case album(String)
+}
+
 private actor LibraryDisk {
     func save(_ snapshot: LibrarySnapshot) throws {
         try LibraryPaths.prepare()
@@ -175,6 +180,7 @@ actor AudioImporter {
     var errorMessage: String?
     var importMessage: String?
     var playlistAddition: PlaylistAddition?
+    var navigationTarget: LibraryDestination?
     @ObservationIgnored private let disk = LibraryDisk()
     @ObservationIgnored private let importer = AudioImporter()
     @ObservationIgnored private var saveTask: Task<Void, Never>?

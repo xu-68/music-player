@@ -38,6 +38,22 @@ struct ArtworkView: View {
     }
 }
 
+struct ArtworkTint: View {
+    var track: Track?
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Color.black
+                if let image = ArtworkCache.shared.image(track?.artworkFilename) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height).blur(radius: 30)
+                }
+                Color.black.opacity(0.65)
+            }.frame(width: proxy.size.width, height: proxy.size.height).clipped()
+        }.allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
 struct FlowingArtworkBackground: View {
     var track: Track?
     var active: Bool
@@ -144,6 +160,10 @@ struct TrackActions: View {
         Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(track.id, next: true) }
         Button("最后播放", systemImage: "text.line.last.and.arrowtriangle.forward") { player.enqueue(track.id, next: false) }
         Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: [track.id]) }
+        Menu("前往艺人", systemImage: "music.mic") {
+            ForEach(library.artists(for: track), id: \.self) { name in Button(name) { library.navigationTarget = .artist(name) } }
+        }
+        Button("前往专辑", systemImage: "square.stack") { library.navigationTarget = .album(track.albumKey) }
         ShareLink(item: LibraryPaths.audio.appending(path: track.filename)) { Label("分享音频文件", systemImage: "square.and.arrow.up") }
     }
 }

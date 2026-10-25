@@ -15,6 +15,7 @@ struct RootView: View {
     @State private var expanded = false
     @State private var importing = false
     @State private var settings = false
+    @State private var libraryPath: [LibraryDestination] = []
     @AppStorage("barBlur") private var barBlur = false
     @Namespace private var playerNamespace
 
@@ -31,7 +32,15 @@ struct RootView: View {
                 TabView(selection: $tab) {
                     NavigationStack { HomeView(importAction: { importing = true }, settingsAction: { settings = true }) }
                         .tag(MusicTab.home).toolbar(.hidden, for: .tabBar)
-                    NavigationStack { LibraryView(importAction: { importing = true }) }
+                    NavigationStack(path: $libraryPath) {
+                        LibraryView(importAction: { importing = true })
+                            .navigationDestination(for: LibraryDestination.self) { destination in
+                                switch destination {
+                                case .artist(let name): ArtistDetailView(artist: name)
+                                case .album(let key): AlbumDetailView(albumKey: key)
+                                }
+                            }
+                    }
                         .tag(MusicTab.library).toolbar(.hidden, for: .tabBar)
                     NavigationStack { StatsView(settingsAction: { settings = true }) }
                         .tag(MusicTab.stats).toolbar(.hidden, for: .tabBar)
@@ -88,6 +97,10 @@ struct RootView: View {
                 Button("好") { player.errorMessage = nil }
             } message: { Text(player.errorMessage ?? "") }
             .onChange(of: player.current?.id) { _, id in if id == nil { closePlayer() } }
+            .onChange(of: library.navigationTarget) { _, target in
+                guard let target else { return }
+                closePlayer(); tab = .library; libraryPath = [target]; library.navigationTarget = nil
+            }
     }
 }
 

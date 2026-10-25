@@ -25,13 +25,13 @@ public struct ListeningEvent: Codable, Sendable {
         countsAsPlay = try box.decodeIfPresent(Bool.self, forKey: .countsAsPlay) ?? false
     }
     public init(session: ListeningSession, track: Track?) {
-        uri = session.originalURI ?? "flamingo://track/\(session.trackID.uuidString)"
+        uri = session.isImported == true ? session.originalURI : session.originalURI ?? "flamingo://track/\(session.trackID.uuidString)"
         title = session.title ?? track?.title ?? "已移除的歌曲"
         artists = session.artist ?? track?.artist ?? "未知艺人"
         album = session.album ?? track?.album ?? "未知专辑"
         albumArtists = track?.albumArtist ?? ""
-        dayStartMs = Int64((session.dayStart ?? Calendar.current.startOfDay(for: session.date)).timeIntervalSince1970 * 1000)
-        timestampMs = Int64(session.date.timeIntervalSince1970 * 1000)
+        dayStartMs = Int64(((session.dayStart ?? Calendar.current.startOfDay(for: session.date)).timeIntervalSince1970 * 1000).rounded())
+        timestampMs = Int64((session.date.timeIntervalSince1970 * 1000).rounded())
         listenedMs = Int64(min(max(0, session.seconds * 1000), Double(Int64.max / 2)))
         countsAsPlay = session.countsAsPlay ?? false
     }
@@ -41,6 +41,7 @@ public struct ListeningEvent: Codable, Sendable {
         value.title = title; value.artist = artists; value.album = album
         value.originalURI = uri; value.countsAsPlay = countsAsPlay
         value.dayStart = Date(timeIntervalSince1970: Double(dayStartMs) / 1000)
+        value.isImported = true
         return value
     }
 }
