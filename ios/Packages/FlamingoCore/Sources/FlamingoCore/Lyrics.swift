@@ -19,6 +19,9 @@ public struct LyricLine: Identifiable, Equatable, Sendable {
     public var text: String
     public var translation: String?
     public var words: [LyricWord]
+    public var transliteration: String?
+    public var agent: String?
+    public var key: String?
     public init(id: Int, start: Double, end: Double? = nil, text: String,
                 translation: String? = nil, words: [LyricWord] = []) {
         self.id = id; self.start = start; self.end = end; self.text = text
@@ -36,7 +39,7 @@ public enum LyricsParser {
             parser.shouldResolveExternalEntities = false
             parser.delegate = delegate
             guard parser.parse() else { return [] }
-            return normalize(delegate.lines)
+            return normalize(delegate.result(), mergeTranslations: false)
         }
         return parseLRC(text)
     }
@@ -49,6 +52,11 @@ public enum LyricsParser {
             if lines[mid].start <= time { low = mid + 1 } else { high = mid }
         }
         return low - 1
+    }
+
+    public static func activeIndices(in lines: [LyricLine], at time: Double) -> Set<Int> {
+        guard time.isFinite else { return [] }
+        return Set(lines.indices.filter { lines[$0].start <= time && time < (lines[$0].end ?? .infinity) })
     }
 
     private static func parseLRC(_ source: String) -> [LyricLine] {
@@ -88,21 +96,30 @@ public enum LyricsParser {
                 for match in matches { result.append(.init(id: result.count, start: max(0, time(match)), text: text)) }
             }
         }
-        return normalize(result)
+        for i in result.indices {
+            for agent in ["v1", "v2"] where result[i].text.hasPrefix(agent + ":") {
+                result[i].agent = agent
+                result[i].text = String(result[i].text.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                if !result[i].words.isEmpty {
+                    result[i].words[0].text = result[i].words[0].text.replacingOccurrences(of: agent + ":", with: "")
+                }
+            }
+        }
+        return normalize(result, mergeTranslations: true)
     }
 
-    private static func normalize(_ input: [LyricLine]) -> [LyricLine] {
+    private static func normalize(_ input: [LyricLine], mergeTranslations: Bool) -> [LyricLine] {
         let sorted = input.sorted { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }
         var result: [LyricLine] = []
         for line in sorted {
-            if let last = result.last, abs(last.start - line.start) < 0.001,
+            if mergeTranslations, let last = result.last, abs(last.start - line.start) < 0.001,
                !last.text.isEmpty, !line.text.isEmpty, last.text != line.text {
                 result[result.count - 1].translation = line.text
             } else { result.append(line) }
         }
         for i in result.indices {
             result[i].id = i
-            if result[i].end == nil, i + 1 < result.count { result[i].end = result[i + 1].start }
+            if result[i].end == nil { result[i].end = result.dropFirst(i + 1).first { $0.start > result[i].start }?.start }
             for j in result[i].words.indices where result[i].words[j].end == nil {
                 result[i].words[j].end = j + 1 < result[i].words.count ? result[i].words[j + 1].start : result[i].end
             }
@@ -120,11 +137,28 @@ private final class TTMLReader: NSObject, XMLParserDelegate {
         var role: String
         var words: [LyricWord] = []
         var translation = ""
+        var transliteration = ""
+        var agent: String?
+        var key: String?
+        var reference: String?
     }
     var lines: [LyricLine] = []
     var stack: [Node] = []
     var frameRate: Double = 30
     var tickRate: Double = 1
+    var translations: [String: String] = [:]
+    var transliterations: [String: String] = [:]
+
+    func result() -> [LyricLine] {
+        lines.map { line in
+            var value = line
+            if let key = line.key {
+                value.translation = translations[key] ?? line.translation
+                value.transliteration = transliterations[key] ?? line.transliteration
+            }
+            return value
+        }
+    }
 
     func seconds(_ value: String) -> Double? {
         let parts = value.split(separator: ":").compactMap { Double($0) }
@@ -149,11 +183,15 @@ private final class TTMLReader: NSObject, XMLParserDelegate {
         let parentBegin = stack.last?.begin ?? 0
         func absolute(_ string: String?) -> Double? {
             guard let string, let value = seconds(string) else { return nil }
-            return string.contains(":") ? value : parentBegin + value
+            // Flamingo/Apple music documents use absolute timestamps for p/span,
+            // including decimal seconds with an s suffix.
+            return value
         }
         let begin = absolute(attribute("begin")) ?? parentBegin
         let end = absolute(attribute("end")) ?? attribute("dur").flatMap(seconds).map { begin + $0 } ?? stack.last?.end
-        stack.append(Node(name: elementName, begin: begin, end: end, role: attribute("role") ?? ""))
+        var node = Node(name: elementName, begin: begin, end: end, role: attribute("role") ?? "")
+        node.agent = attribute("agent"); node.key = attribute("key"); node.reference = attribute("for")
+        stack.append(node)
     }
     func parser(_ parser: XMLParser, foundCharacters string: String) {
         if !stack.isEmpty { stack[stack.count - 1].text += string }
@@ -162,19 +200,29 @@ private final class TTMLReader: NSObject, XMLParserDelegate {
         if elementName == "br" { return }
         guard let node = stack.popLast() else { return }
         let translation = node.role.contains("translation")
-        if elementName == "p" {
+        let transliteration = node.role.contains("transliteration")
+        if elementName == "text", let key = node.reference {
+            if stack.contains(where: { $0.name == "transliterations" }) { transliterations[key] = node.text }
+            else if stack.contains(where: { $0.name == "translations" }) { translations[key] = node.text }
+        }
+        if elementName == "p", stack.contains(where: { $0.name == "body" }) {
             let text = node.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            lines.append(.init(id: lines.count, start: node.begin, end: node.end, text: text,
-                               translation: node.translation.isEmpty ? nil : node.translation, words: node.words))
+            var line = LyricLine(id: lines.count, start: node.begin, end: node.end ?? node.words.last?.end, text: text,
+                                 translation: node.translation.isEmpty ? nil : node.translation, words: node.words)
+            line.transliteration = node.transliteration.isEmpty ? nil : node.transliteration
+            line.agent = node.agent; line.key = node.key
+            lines.append(line)
         } else if !stack.isEmpty {
             let i = stack.count - 1
-            if translation { stack[i].translation += node.text }
+            if transliteration { stack[i].transliteration += node.text }
+            else if translation { stack[i].translation += node.text }
             else {
                 stack[i].text += node.text
                 if elementName == "span", node.words.isEmpty, !node.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     stack[i].words.append(.init(text: node.text, start: node.begin, end: node.end))
                 } else { stack[i].words += node.words }
                 stack[i].translation += node.translation
+                stack[i].transliteration += node.transliteration
             }
         }
     }

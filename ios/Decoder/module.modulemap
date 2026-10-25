@@ -1,0 +1,4 @@
+module FlamingoDecoder {
+    header "FlamingoDecoder.h"
+    export *
+}

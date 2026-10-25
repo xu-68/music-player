@@ -35,8 +35,8 @@ final class CoreTests: XCTestCase {
     func testTTMLOffsetDurationsAndMalformedInput() {
         let xml = #"<tt xmlns="http://www.w3.org/ns/ttml"><body begin="2s"><div><p begin="1s" dur="3s"><span begin="0s" dur="1s">First</span><br/>line</p></div></body></tt>"#
         let lines = LyricsParser.parse(xml)
-        XCTAssertEqual(lines.first?.start, 3)
-        XCTAssertEqual(lines.first?.end, 6)
+        XCTAssertEqual(lines.first?.start, 1)
+        XCTAssertEqual(lines.first?.end, 4)
         XCTAssertEqual(lines.first?.text, "First\nline")
         XCTAssertTrue(LyricsParser.parse("<tt><broken>").isEmpty)
         XCTAssertTrue(LyricsParser.parse("No timestamps").isEmpty)
@@ -58,6 +58,46 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(queue.current?.trackID, ids[0])
         XCTAssertTrue(queue.previous())
         XCTAssertEqual(queue.current?.trackID, ids[2])
+    }
+    func testTTMLAppleMetadataDuetsAndSecondsAreAbsolute() {
+        let xml = #"<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal"><head><metadata><translations><text for="L1">你好</text></translations><transliterations><text for="L1">ni hao</text></transliterations></metadata></head><body><div><p begin="1s" end="4s" itunes:key="L1" ttm:agent="v1"><span begin="1s" end="2s">Hello</span></p><p begin="1s" end="3s" ttm:agent="v2">World</p><p begin="7s" end="8s">End</p></div></body></tt>"#
+        let lines = LyricsParser.parse(xml)
+        XCTAssertEqual(lines.count, 3)
+        XCTAssertEqual(lines[0].words[0].start, 1)
+        XCTAssertEqual(lines[0].translation, "你好")
+        XCTAssertEqual(lines[0].transliteration, "ni hao")
+        XCTAssertEqual(lines[1].agent, "v2")
+        XCTAssertEqual(LyricsParser.activeIndices(in: lines, at: 2), [0, 1])
+        XCTAssertEqual(LyricsParser.activeIndices(in: lines, at: 5), [])
+        XCTAssertEqual(LyricsParser.parse("[00:01]v2:Duet")[0].agent, "v2")
+    }
+    func testQueueReorderRoundTripAndMoveNext() throws {
+        let ids = (0..<5).map { _ in UUID() }
+        var queue = PlaybackQueue(); queue.replace(with: ids, startingAt: 2)
+        let current = queue.current
+        queue.moveNext(queue.entries[0].id)
+        XCTAssertEqual(queue.current, current)
+        XCTAssertEqual(queue.upcoming.first?.trackID, ids[0])
+        queue.move(from: IndexSet(integer: 4), to: 0)
+        XCTAssertEqual(queue.current, current)
+        let restored = try JSONDecoder().decode(PlaybackQueue.self, from: JSONEncoder().encode(queue))
+        XCTAssertEqual(restored.entries, queue.entries)
+        XCTAssertEqual(restored.current, current)
+        queue.clearUpcoming(); XCTAssertTrue(queue.upcoming.isEmpty)
+    }
+    func testPortableStatsBackupMergeAndDeletedMetadata() throws {
+        let track = Track(title: "Song", artist: "Singer", album: "Album", filename: "a.wav")
+        var session = ListeningSession(trackID: track.id, seconds: 70)
+        session.countsAsPlay = true
+        let data = try ListeningBackup.export([session], tracks: [track])
+        let restored = try ListeningBackup.restore(data, into: [], tracks: [], merge: false)
+        XCTAssertEqual(restored[0].title, "Song")
+        XCTAssertEqual(restored[0].seconds, 70)
+        XCTAssertEqual(restored[0].countsAsPlay, true)
+        XCTAssertEqual(try ListeningBackup.restore(data, into: restored, tracks: [], merge: true).count, 1)
+        XCTAssertEqual(try ListeningBackup.restore(data, into: [session], tracks: [track], merge: false).count, 1)
+        let legacy = try JSONDecoder().decode(LibrarySnapshot.self, from: Data("{\"version\":1,\"tracks\":[],\"playlists\":[],\"sessions\":[]}".utf8))
+        XCTAssertTrue(legacy.folders.isEmpty)
     }
     func testShufflePreservesCurrentAndRestoresOrder() {
         let ids = (0..<20).map { _ in UUID() }

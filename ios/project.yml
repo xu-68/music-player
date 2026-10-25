@@ -30,6 +30,13 @@ targets:
         buildPhase: resources
     dependencies:
       - package: FlamingoCore
+      - framework: Build/Decoder/FlamingoDecoder.xcframework
+        embed: false
+      - sdk: AudioToolbox.framework
+      - sdk: CoreFoundation.framework
+      - sdk: libiconv.tbd
+      - sdk: libz.tbd
+      - sdk: libbz2.tbd
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.flamingo.local.player

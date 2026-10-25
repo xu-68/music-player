@@ -10,6 +10,7 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 command -v xcodebuild >/dev/null || { echo 'Install and select Xcode first.' >&2; exit 1; }
 command -v xcodegen >/dev/null || { echo 'Install XcodeGen: brew install xcodegen' >&2; exit 1; }
+bash scripts/build_decoder.sh
 xcodegen generate --spec project.yml
 mkdir -p Build
 STAMP="$(date +%Y%m%d-%H%M%S)"

@@ -17,6 +17,12 @@ jobs:
         run: brew install xcodegen
       - name: Record toolchain
         run: xcodebuild -version
+      - uses: actions/cache@v4
+        with:
+          path: ios/Build/Decoder/FlamingoDecoder.xcframework
+          key: decoder-7.1.5-${{ runner.arch }}-${{ hashFiles('ios/scripts/build_decoder.sh', 'ios/Decoder/**') }}
+      - name: Build native audio decoder
+        run: bash ios/scripts/build_decoder.sh
       - name: Core unit tests
         working-directory: ios/Packages/FlamingoCore
         run: swift test
@@ -38,6 +44,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install project generator
         run: brew install xcodegen
+      - uses: actions/cache@v4
+        with:
+          path: ios/Build/Decoder/FlamingoDecoder.xcframework
+          key: decoder-7.1.5-${{ runner.arch }}-${{ hashFiles('ios/scripts/build_decoder.sh', 'ios/Decoder/**') }}
       - name: Simulator UI and playback tests
         run: bash ios/scripts/build.sh ui-test
       - name: Export native screenshots
