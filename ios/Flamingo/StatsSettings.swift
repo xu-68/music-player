@@ -262,8 +262,8 @@ struct SleepTimerView: View {
                 Section("正在计时") {
                     LabeledContent("停止方式", value: plan.mode.rawValue)
                     if let deadline = plan.deadline {
-                        HStack { Text("剩余时间"); Spacer(); Text(timerInterval: Date()...max(Date(), deadline), countsDown: true).monospacedDigit() }
-                        HStack { Button("延长 5 分钟") { player.extendSleepTimer(minutes: 5) }; Spacer(); Button("延长 15 分钟") { player.extendSleepTimer(minutes: 15) } }
+                        HStack { Text("剩余时间"); Spacer(); Text(timerInterval: Date()...max(Date(), deadline), countsDown: true).monospacedDigit().accessibilityIdentifier("sleep-remaining") }
+                        HStack { Button("延长 5 分钟") { player.extendSleepTimer(minutes: 5) }; Spacer(); Button("延长 15 分钟") { player.extendSleepTimer(minutes: 15) } }.buttonStyle(.borderless)
                     }
                     Button("取消定时", role: .destructive) { player.cancelSleepTimer() }
                 }

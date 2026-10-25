@@ -95,6 +95,13 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(start.waitForExistence(timeout: 5)); start.tap()
         XCTAssertTrue(app.buttons["取消定时"].waitForExistence(timeout: 5))
         app.buttons["延长 5 分钟"].tap()
+        let remaining = app.staticTexts["sleep-remaining"]
+        let extended = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let text = (remaining.value as? String) ?? remaining.label
+            let minutes = text.split(whereSeparator: { !$0.isNumber }).first.flatMap { Int($0) }
+            return minutes == 34 || minutes == 35
+        }, object: remaining)
+        XCTAssertEqual(XCTWaiter.wait(for: [extended], timeout: 5), .completed)
         capture("10-sleep-timer")
         app.buttons["取消定时"].tap()
         XCTAssertFalse(app.buttons["取消定时"].exists)
