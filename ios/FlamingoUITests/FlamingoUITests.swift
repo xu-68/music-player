@@ -103,6 +103,22 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         capture("11-settings")
     }
+    func testPlaybackPositionSurvivesAppRestart() {
+        app.buttons["mini-player"].tap()
+        app.buttons["show-lyrics"].tap()
+        let line = app.buttons["lyric-1"]
+        for _ in 0..<4 where !line.isHittable { app.scrollViews["lyrics-scroll"].swipeUp() }
+        XCTAssertTrue(line.isHittable); line.tap()
+        app.buttons["close-player"].tap()
+        XCUIDevice.shared.press(.home)
+        app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
+        XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 10)); app.buttons["mini-player"].tap()
+        let progress = app.descendants(matching: .any)["playback-progress"].firstMatch
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (progress.value as? String ?? "").hasPrefix("0:05")
+        }, object: progress)
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
+    }
     private func capture(_ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)

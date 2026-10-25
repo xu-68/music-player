@@ -67,7 +67,8 @@ public enum LyricsParser {
         let offset = offsetPattern.firstMatch(in: source, range: NSRange(location: 0, length: ns.length))
             .flatMap { Double(ns.substring(with: $0.range(at: 1))) }.map { $0 / 1000 } ?? 0
         var result: [LyricLine] = []
-        for raw in source.components(separatedBy: .newlines) {
+        for original in source.components(separatedBy: .newlines) {
+            let raw = original.trimmingCharacters(in: .whitespaces.union(CharacterSet(charactersIn: "\u{feff}")))
             let line = raw as NSString
             let matches = stamp.matches(in: raw, range: NSRange(location: 0, length: line.length))
             guard let first = matches.first, first.range.location == 0 else { continue }
@@ -189,7 +190,7 @@ private final class TTMLReader: NSObject, XMLParserDelegate {
             return value
         }
         let begin = absolute(attribute("begin")) ?? parentBegin
-        let end = absolute(attribute("end")) ?? attribute("dur").flatMap(seconds).map { begin + $0 } ?? stack.last?.end
+        let end = absolute(attribute("end")) ?? attribute("dur").flatMap(seconds).map { begin + $0 } ?? (elementName == "p" ? nil : stack.last?.end)
         var node = Node(name: elementName, begin: begin, end: end, role: attribute("role") ?? "")
         node.agent = attribute("agent"); node.key = attribute("key"); node.reference = attribute("for")
         stack.append(node)

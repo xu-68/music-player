@@ -56,10 +56,11 @@ import Observation
         configureRemoteCommands()
         if let data = AppPreferences.defaults.data(forKey: "playbackQueue"),
            let restored = try? JSONDecoder().decode(PlaybackQueue.self, from: data) {
+            let position = AppPreferences.defaults.double(forKey: "playbackPosition")
             queue = restored
             for id in Set(queue.entries.map(\.trackID)) where library.track(id) == nil { queue.removeTrack(id) }
             loadCurrent(autoplay: false)
-            seek(to: AppPreferences.defaults.double(forKey: "playbackPosition"))
+            seek(to: position)
         } else if let idString = AppPreferences.defaults.string(forKey: "lastTrack"), let id = UUID(uuidString: idString), library.track(id) != nil {
             queue.replace(with: [id]); loadCurrent(autoplay: false)
         }
