@@ -98,6 +98,7 @@ actor AudioImporter {
                               album: await string(.commonKeyAlbumName) ?? "未知专辑", filename: filename,
                               duration: duration.isFinite ? duration : 0)
             track.originalFilename = source.lastPathComponent
+            track.sourceDirectory = source.deletingLastPathComponent().path
             track.modifiedAt = try? source.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
             track.decodedFilename = decodedName
             if !fallbackTags.isEmpty {
@@ -198,7 +199,7 @@ actor AudioImporter {
             errorMessage = "资料库读取失败，为保护原有数据，已停止写入。请先备份应用 Documents/Flamingo：\(error.localizedDescription)"
         }
     }
-    var tracks: [Track] { snapshot.tracks }
+    var tracks: [Track] { snapshot.tracks.filter { !snapshot.hiddenDirectories.contains($0.sourceDirectory ?? "") } }
     var playlists: [Playlist] { snapshot.playlists }
     func artists(for track: Track) -> [String] {
         let separators = AppPreferences.defaults.string(forKey: "artistSeparators") ?? ","
@@ -212,8 +213,15 @@ actor AudioImporter {
         else { snapshot.followedArtists.append(artist) }
         scheduleSave()
     }
-    func track(_ id: UUID) -> Track? { tracks.first { $0.id == id } }
-    func tracks(for playlist: Playlist) -> [Track] { playlist.trackIDs.compactMap(track) }
+    func track(_ id: UUID) -> Track? { snapshot.tracks.first { $0.id == id } }
+    func tracks(for playlist: Playlist) -> [Track] {
+        playlist.trackIDs.compactMap(track).filter { !snapshot.hiddenDirectories.contains($0.sourceDirectory ?? "") }
+    }
+    func setDirectory(_ directory: String, included: Bool) {
+        snapshot.hiddenDirectories.removeAll { $0 == directory }
+        if !included { snapshot.hiddenDirectories.append(directory) }
+        scheduleSave()
+    }
     var albums: [[Track]] {
         Dictionary(grouping: tracks, by: \.albumKey).values.map { tracks in
             tracks.sorted { ($0.discNumber, $0.trackNumber, $0.title) < ($1.discNumber, $1.trackNumber, $1.title) }
@@ -243,8 +251,11 @@ actor AudioImporter {
             do {
                 var track = try await importer.importAudio(url, systemOnly: AppPreferences.defaults.bool(forKey: "systemDecoderOnly"))
                 track.sourceFolderID = folderID
-                if let existing = tracks.first(where: { $0.filename == track.filename }) {
-                    track = existing; report.duplicates += 1
+                if let existing = snapshot.tracks.first(where: { $0.filename == track.filename }) {
+                    if existing.sourceFolderID == nil, let folderID, let i = snapshot.tracks.firstIndex(where: { $0.id == existing.id }) {
+                        snapshot.tracks[i].sourceFolderID = folderID; snapshot.tracks[i].sourceDirectory = track.sourceDirectory
+                    }
+                    track = self.track(existing.id) ?? existing; report.duplicates += 1
                 } else if AppPreferences.defaults.bool(forKey: "excludeShort"), track.duration < 60 {
                     try? FileManager.default.removeItem(at: LibraryPaths.audio.appending(path: track.filename))
                     if let name = track.decodedFilename { try? FileManager.default.removeItem(at: LibraryPaths.decoded.appending(path: name)) }

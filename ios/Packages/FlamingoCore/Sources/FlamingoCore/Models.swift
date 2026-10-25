@@ -19,6 +19,7 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
     public var originalFilename: String?
     public var modifiedAt: Date?
     public var sourceFolderID: UUID?
+    public var sourceDirectory: String?
     public var videoFilename: String?
     public var decodedFilename: String?
     public var codec: String?
@@ -91,8 +92,9 @@ public struct LibrarySnapshot: Codable, Sendable {
     public var sessions: [ListeningSession] = []
     public var followedArtists: [String] = []
     public var folders: [MusicFolder] = []
+    public var hiddenDirectories: [String] = []
     public init() {}
-    enum CodingKeys: String, CodingKey { case version, tracks, playlists, sessions, followedArtists, folders }
+    enum CodingKeys: String, CodingKey { case version, tracks, playlists, sessions, followedArtists, folders, hiddenDirectories }
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
         version = try box.decodeIfPresent(Int.self, forKey: .version) ?? 1
@@ -101,6 +103,7 @@ public struct LibrarySnapshot: Codable, Sendable {
         sessions = try box.decodeIfPresent([ListeningSession].self, forKey: .sessions) ?? []
         followedArtists = try box.decodeIfPresent([String].self, forKey: .followedArtists) ?? []
         folders = try box.decodeIfPresent([MusicFolder].self, forKey: .folders) ?? []
+        hiddenDirectories = try box.decodeIfPresent([String].self, forKey: .hiddenDirectories) ?? []
     }
 }
 

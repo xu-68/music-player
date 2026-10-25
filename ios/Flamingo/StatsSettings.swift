@@ -188,6 +188,7 @@ struct SettingsView: View {
                     TextField("艺人拆分符号", text: $artistSeparators)
                     Button("添加音乐文件夹", systemImage: "folder.badge.plus") { importingFolders = true; importing = true }.disabled(library.importing)
                     Button("刷新音乐文件夹", systemImage: "arrow.clockwise") { Task { await library.refreshFolders() } }.disabled(library.importing)
+                    NavigationLink("文件夹总览与排除") { FolderOverviewView() }
                     ForEach(library.snapshot.folders) { folder in HStack { Label(folder.name, systemImage: "folder"); Spacer(); Button("移除") { library.removeFolder(folder.id) }.foregroundStyle(.red) } }
                 }
                 Section {
@@ -230,6 +231,25 @@ struct SettingsView: View {
                     Button("清空", role: .destructive) { if clearing == "统计" { player.clearStatistics() } else { library.clearHistory() } }
                 } message: { Text("此操作无法撤销。请先导出需要保留的统计。") }
         }
+    }
+}
+
+private struct FolderOverviewView: View {
+    @Environment(LibraryStore.self) private var library
+    private var directories: [String] { Set(library.snapshot.tracks.compactMap(\.sourceDirectory)).sorted() }
+    var body: some View {
+        List(directories, id: \.self) { directory in
+            let tracks = library.snapshot.tracks.filter { $0.sourceDirectory == directory }
+            HStack {
+                NavigationLink { SongsView(title: URL(fileURLWithPath: directory).lastPathComponent, ids: tracks.map(\.id)) } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(URL(fileURLWithPath: directory).lastPathComponent, systemImage: "folder")
+                        Text("\(tracks.count) 首歌曲").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Toggle("包含此文件夹", isOn: Binding(get: { !library.snapshot.hiddenDirectories.contains(directory) }, set: { library.setDirectory(directory, included: $0) })).labelsHidden()
+            }
+        }.navigationTitle("文件夹总览").overlay { if directories.isEmpty { ContentUnavailableView("还没有导入文件夹", systemImage: "folder") } }
     }
 }
 struct SleepTimerView: View {
