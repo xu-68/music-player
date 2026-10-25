@@ -66,8 +66,9 @@ int flamingo_decode(const char *input, const char *output, const char *metadata,
     int channels = codec->ch_layout.nb_channels;
     int rate = codec->sample_rate;
     if (channels <= 0 || channels > 32 || rate <= 0) { result = AVERROR_INVALIDDATA; goto done; }
-    AVChannelLayout layout;
-    av_channel_layout_copy(&layout, &codec->ch_layout);
+    AVChannelLayout layout = {0};
+    result = av_channel_layout_copy(&layout, &codec->ch_layout);
+    if (result < 0) goto done;
     result = swr_alloc_set_opts2(&swr, &layout, AV_SAMPLE_FMT_FLT, rate,
                                &codec->ch_layout, codec->sample_fmt, rate, 0, NULL);
     av_channel_layout_uninit(&layout);

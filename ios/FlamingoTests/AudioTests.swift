@@ -41,9 +41,10 @@ final class AudioTests: XCTestCase {
         let folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        for ext in ["wma", "ogg", "opus", "flac", "wv"] {
+        // Repeated calls also cover native channel-layout allocation/cleanup.
+        for ext in ["wma", "ogg", "opus", "flac", "wv", "wma", "opus", "flac"] {
             let input = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "tone", withExtension: ext), "Generate synthetic fixtures before testing")
-            let output = folder.appending(path: ext + ".caf")
+            let output = folder.appending(path: UUID().uuidString + ".caf")
             let tags = try NativeDecoder.decode(input, output: output)
             XCTAssertEqual(tags["title"], "Decoder fixture", ext)
             let asset = AVURLAsset(url: output)
