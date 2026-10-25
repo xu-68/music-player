@@ -32,6 +32,7 @@ public struct LyricLine: Identifiable, Equatable, Sendable {
 public enum LyricsParser {
     public static func parse(_ text: String) -> [LyricLine] {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.range(of: "<!DOCTYPE", options: .caseInsensitive) == nil else { return [] }
         if trimmed.hasPrefix("<") || trimmed.hasPrefix("\u{feff}<") {
             let delegate = TTMLReader()
             let parser = XMLParser(data: Data(trimmed.utf8))

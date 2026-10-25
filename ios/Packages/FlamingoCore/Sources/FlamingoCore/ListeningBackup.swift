@@ -30,7 +30,7 @@ public struct ListeningEvent: Codable, Sendable {
         artists = session.artist ?? track?.artist ?? "未知艺人"
         album = session.album ?? track?.album ?? "未知专辑"
         albumArtists = track?.albumArtist ?? ""
-        dayStartMs = Int64(Calendar.current.startOfDay(for: session.date).timeIntervalSince1970 * 1000)
+        dayStartMs = Int64((session.dayStart ?? Calendar.current.startOfDay(for: session.date)).timeIntervalSince1970 * 1000)
         timestampMs = Int64(session.date.timeIntervalSince1970 * 1000)
         listenedMs = Int64(min(max(0, session.seconds * 1000), Double(Int64.max / 2)))
         countsAsPlay = session.countsAsPlay ?? false
@@ -40,6 +40,7 @@ public struct ListeningEvent: Codable, Sendable {
         var value = ListeningSession(trackID: trackID, date: Date(timeIntervalSince1970: Double(timestampMs) / 1000), seconds: Double(max(0, listenedMs)) / 1000)
         value.title = title; value.artist = artists; value.album = album
         value.originalURI = uri; value.countsAsPlay = countsAsPlay
+        value.dayStart = Date(timeIntervalSince1970: Double(dayStartMs) / 1000)
         return value
     }
 }

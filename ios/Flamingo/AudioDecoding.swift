@@ -13,7 +13,9 @@ enum NativeDecoder {
         }
         let data = try Data(contentsOf: metadata)
         let value = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: String] ?? [:]
+        var normalized = value
+        for (key, text) in value where !["sampleRate", "bitsPerSample", "bitRate"].contains(key) { normalized[key.lowercased()] = text }
         try? FileManager.default.removeItem(at: metadata)
-        return value
+        return normalized
     }
 }

@@ -69,9 +69,10 @@ actor AudioImporter {
         do {
             var asset = AVURLAsset(url: destination)
             let playable = (try? await asset.load(.isPlayable)) ?? false
+            let systemTracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
             var decodedName: String?
             var fallbackTags: [String: String] = [:]
-            if !playable && !systemOnly {
+            if (!playable || systemTracks.isEmpty) && !systemOnly {
                 let name = fingerprint + ".caf"
                 fallbackTags = try NativeDecoder.decode(destination, output: LibraryPaths.decoded.appending(path: name))
                 decodedName = name
@@ -343,6 +344,12 @@ actor AudioImporter {
         guard ready, let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return }
         snapshot.tracks[i].isFavorite.toggle(); scheduleSave()
     }
+    func setFavorite(_ ids: [UUID], value: Bool) {
+        guard ready else { return }
+        let selected = Set(ids)
+        for i in snapshot.tracks.indices where selected.contains(snapshot.tracks[i].id) { snapshot.tracks[i].isFavorite = value }
+        scheduleSave()
+    }
     func markPlayed(_ id: UUID) {
         guard ready, AppPreferences.defaults.bool(forKey: "listeningHistory"), let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return }
         snapshot.tracks[i].lastPlayedAt = Date(); scheduleSave()
@@ -350,7 +357,7 @@ actor AudioImporter {
         let old = Set(recent.dropFirst(50).map(\.id))
         for i in snapshot.tracks.indices where old.contains(snapshot.tracks[i].id) { snapshot.tracks[i].lastPlayedAt = nil }
     }
-    func recordListening(_ id: UUID, sessionID: UUID, seconds: Double, qualified: Bool) {
+    func recordListening(_ id: UUID, sessionID: UUID, seconds: Double, qualified: Bool, day: Date) {
         guard ready, AppPreferences.defaults.bool(forKey: "listeningHistory"), seconds > 0, seconds.isFinite, let track = track(id) else { return }
         if let i = snapshot.sessions.firstIndex(where: { $0.id == sessionID }) {
             snapshot.sessions[i].seconds = seconds
@@ -358,6 +365,7 @@ actor AudioImporter {
         } else {
             var session = ListeningSession(trackID: id, seconds: seconds)
             session.id = sessionID; session.title = track.title; session.artist = track.artist; session.album = track.album
+            session.dayStart = day
             session.countsAsPlay = qualified
             snapshot.sessions.append(session)
         }
@@ -366,12 +374,12 @@ actor AudioImporter {
     func importStatistics(_ url: URL, merge: Bool) throws {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
-        snapshot.sessions = try ListeningBackup.restore(Data(contentsOf: url), into: snapshot.sessions.filter { $0.countsAsPlay != false }, tracks: tracks, merge: merge)
+        snapshot.sessions = try ListeningBackup.restore(Data(contentsOf: url), into: snapshot.sessions, tracks: tracks, merge: merge)
         scheduleSave()
     }
     func exportStatistics() throws -> URL {
         let target = LibraryPaths.root.appending(path: "Flamingo-Statistics.json")
-        try ListeningBackup.export(snapshot.sessions.filter { $0.countsAsPlay != false }, tracks: tracks).write(to: target, options: .atomic)
+        try ListeningBackup.export(snapshot.sessions, tracks: tracks).write(to: target, options: .atomic)
         return target
     }
     func clearStatistics() { snapshot.sessions = []; scheduleSave() }

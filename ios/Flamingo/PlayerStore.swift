@@ -31,6 +31,9 @@ import Observation
     @ObservationIgnored private var listeningID = UUID()
     @ObservationIgnored private var listenedSeconds: Double = 0
     @ObservationIgnored private var qualifiedPlay = false
+    @ObservationIgnored private var qualificationDay: Date?
+    @ObservationIgnored private var dailyListening: [Date: Double] = [:]
+    @ObservationIgnored private var dailyListeningIDs: [Date: UUID] = [:]
     @ObservationIgnored private var lastPersistedPosition: Double = 0
     var current: Track? { queue.current.flatMap { library.track($0.trackID) } }
 
@@ -156,10 +159,20 @@ import Observation
     }
     func flushListening() {
         listenedSeconds += unrecorded
-        if let id = current?.id, listenedSeconds > 0, qualifiedPlay {
-            library.recordListening(id, sessionID: listeningID, seconds: listenedSeconds, qualified: true)
+        if let id = current?.id, qualifiedPlay {
+            for (day, seconds) in dailyListening {
+                let token = dailyListeningIDs[day] ?? UUID(); dailyListeningIDs[day] = token
+                library.recordListening(id, sessionID: token, seconds: seconds, qualified: qualificationDay == day, day: day)
+            }
         }
         unrecorded = 0
+    }
+    func clearStatistics() {
+        library.clearStatistics(); resetListening()
+    }
+    private func resetListening() {
+        listeningID = UUID(); listenedSeconds = 0; unrecorded = 0; qualifiedPlay = false
+        qualificationDay = nil; dailyListening = [:]; dailyListeningIDs = [:]
     }
     func setSleepTimer(minutes: Int?) {
         if let minutes { setSleepTimer(mode: .duration, minutes: Double(minutes)) } else { cancelSleepTimer() }
@@ -223,7 +236,7 @@ import Observation
         player.replaceCurrentItem(with: item)
         elapsed = 0; duration = track.duration; isPlaying = false; lastMediaTime = 0; pendingSeek = nil
         lastUptime = ProcessInfo.processInfo.systemUptime
-        listeningID = UUID(); listenedSeconds = 0; qualifiedPlay = false; unrecorded = 0
+        resetListening()
         persistQueue()
         refreshLyrics()
         AppPreferences.defaults.set(track.id.uuidString, forKey: "lastTrack")
@@ -251,10 +264,13 @@ import Observation
         if let value = player.currentItem?.duration.seconds, value.isFinite, value > 0 { duration = value }
         if player.timeControlStatus == .playing, pendingSeek == nil {
             if AppPreferences.defaults.bool(forKey: "listeningHistory") {
-                unrecorded += min(max(mediaDelta, 0), max(delta, 0) + 0.25)
-                if duration > 0, elapsed / duration >= 0.5 { qualifiedPlay = true }
+                let actual = min(max(mediaDelta, 0), max(delta, 0) + 0.25)
+                unrecorded += actual
+                let day = Calendar.current.startOfDay(for: Date())
+                dailyListening[day, default: 0] += actual
+                if !qualifiedPlay, duration > 0, elapsed / duration >= 0.5 { qualifiedPlay = true; qualificationDay = day }
             }
-            if unrecorded >= 15 { flushListening() }
+            if unrecorded >= 10 { flushListening() }
         }
         if abs(elapsed - lastPersistedPosition) >= 5 { lastPersistedPosition = elapsed; persistQueue() }
     }

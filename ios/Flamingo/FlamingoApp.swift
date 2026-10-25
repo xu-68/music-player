@@ -26,6 +26,7 @@ enum AppPreferences {
                 .defaultAppStorage(AppPreferences.defaults)
                 .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
                 .task { if AppPreferences.defaults.bool(forKey: "refreshOnLaunch") { await library.refreshFolders() } }
+                .onOpenURL { url in if url.isFileURL { Task { await library.importFiles([url]) } } }
                 .onChange(of: scenePhase) { _, phase in
                     if phase != .active { player.flushListening(); player.persistQueue(); Task { await library.saveNow() } }
                 }

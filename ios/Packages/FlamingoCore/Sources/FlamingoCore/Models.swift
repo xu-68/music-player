@@ -77,6 +77,7 @@ public struct ListeningSession: Codable, Identifiable, Sendable {
     public var album: String?
     public var originalURI: String?
     public var countsAsPlay: Bool?
+    public var dayStart: Date?
     public init(trackID: UUID, date: Date = Date(), seconds: Double) {
         self.id = UUID(); self.trackID = trackID; self.date = date; self.seconds = seconds
     }

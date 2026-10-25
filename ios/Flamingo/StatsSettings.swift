@@ -22,11 +22,11 @@ struct StatsView: View {
     @AppStorage("statsPeriod") private var periodName = "本月"
     private var period: ListeningPeriod { ListeningPeriod(rawValue: periodName) ?? .month }
     private var sessions: [ListeningSession] {
-        let recorded = library.snapshot.sessions.filter { $0.countsAsPlay != false }
+        let recorded = library.snapshot.sessions
         if period == .all { return recorded }
         var calendar = Calendar.current; calendar.firstWeekday = 2; calendar.minimumDaysInFirstWeek = 4
         guard let interval = calendar.dateInterval(of: period.component, for: Date()) else { return [] }
-        return recorded.filter { interval.contains($0.date) }
+        return recorded.filter { interval.contains($0.dayStart ?? $0.date) }
     }
     private var total: Double { sessions.reduce(0) { $0 + $1.seconds } }
     private func ranks(_ kind: Int) -> [ListeningRank] {
@@ -227,7 +227,7 @@ struct SettingsView: View {
                     }
                 }
                 .confirmationDialog("清空\(clearing)？", isPresented: $confirmClear, titleVisibility: .visible) {
-                    Button("清空", role: .destructive) { if clearing == "统计" { library.clearStatistics() } else { library.clearHistory() } }
+                    Button("清空", role: .destructive) { if clearing == "统计" { player.clearStatistics() } else { library.clearHistory() } }
                 } message: { Text("此操作无法撤销。请先导出需要保留的统计。") }
         }
     }

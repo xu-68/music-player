@@ -159,38 +159,6 @@ struct AlbumsView: View {
     }
 }
 
-struct AlbumDetailView: View {
-    let albumKey: String
-    @Environment(LibraryStore.self) private var library
-    @Environment(PlayerStore.self) private var player
-    private var tracks: [Track] { library.albums.first { $0.first?.albumKey == albumKey } ?? [] }
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                ArtworkView(track: tracks.first, radius: 10).frame(maxWidth: 290).padding(.top, 20)
-                    .shadow(color: .black.opacity(0.18), radius: 18, y: 10)
-                VStack(spacing: 4) {
-                    Text(tracks.first?.album ?? "专辑").font(.title2.bold()).multilineTextAlignment(.center)
-                    Text(tracks.first.map { $0.albumArtist.isEmpty ? $0.artist : $0.albumArtist } ?? "").font(.title3).foregroundStyle(MusicDesign.accent)
-                    Text("\(tracks.count) 首歌曲 · \(Int(tracks.reduce(0) { $0 + $1.duration }) / 60) 分钟").font(.caption).foregroundStyle(.secondary)
-                }
-                CollectionPlayButtons(tracks: tracks).padding(.vertical, 6)
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
-                        VStack(spacing: 0) {
-                            HStack {
-                                TrackRow(track: track, showArtwork: false, number: track.trackNumber > 0 ? track.trackNumber : index + 1) { player.play(track, in: tracks) }
-                                Menu { TrackActions(track: track) } label: { Image(systemName: "ellipsis").frame(width: 36, height: 44) }
-                            }.contextMenu { TrackActions(track: track) }
-                            Divider().padding(.leading, 36)
-                        }
-                    }
-                }
-            }.padding(.horizontal, 24).padding(.bottom, 30).frame(maxWidth: 700).frame(maxWidth: .infinity)
-        }.navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 struct CollectionPlayButtons: View {
     var tracks: [Track]
     @Environment(PlayerStore.self) private var player
@@ -384,17 +352,6 @@ struct SongSortMenu: View {
             }
             Toggle("降序", isOn: $descending)
         } label: { Label("排序", systemImage: "arrow.up.arrow.down") }
-    }
-}
-
-struct ArtistDetailView: View {
-    let artist: String
-    @Environment(LibraryStore.self) private var library
-    var body: some View {
-        SongsView(title: artist, ids: library.tracks.filter { library.artists(for: $0).contains(artist) }.map(\.id))
-            .toolbar { ToolbarItem(placement: .topBarTrailing) {
-                Button(library.snapshot.followedArtists.contains(artist) ? "取消关注" : "关注", systemImage: library.snapshot.followedArtists.contains(artist) ? "star.fill" : "star") { library.toggleFollow(artist) }
-            } }
     }
 }
 
