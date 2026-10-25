@@ -38,6 +38,7 @@ import UIKit
             try JSONEncoder().encode(snapshot).write(to: LibraryPaths.database, options: .atomic)
             AppPreferences.defaults.set(snapshot.tracks.first?.id.uuidString, forKey: "lastTrack")
             AppPreferences.defaults.set("dark", forKey: "appearance")
+            AppPreferences.defaults.set(false, forKey: "animatedBackground")
         } catch { assertionFailure("UI fixture creation failed: \(error)") }
     }
     private static func makeArtwork(title: String, index: Int, first: UIColor, second: UIColor) -> UIImage {

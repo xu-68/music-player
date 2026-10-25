@@ -36,6 +36,9 @@ final class FlamingoUITests: XCTestCase {
         toggle.tap()
         let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "暂停"), object: toggle)
         XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 8), .completed)
+        toggle.tap()
+        let pausedBeforeSeek = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "播放"), object: toggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [pausedBeforeSeek], timeout: 5), .completed)
         app.buttons["show-lyrics"].tap()
         let lyric = app.buttons["lyric-1"]
         let lyricsScroll = app.scrollViews["lyrics-scroll"]
@@ -54,6 +57,9 @@ final class FlamingoUITests: XCTestCase {
         }, object: progress)
         XCTAssertEqual(XCTWaiter.wait(for: [sought], timeout: 5), .completed)
         capture("07-playing-lyrics")
+        toggle.tap()
+        let resumed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "暂停"), object: toggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [resumed], timeout: 5), .completed)
         toggle.tap()
         let paused = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "播放"), object: toggle)
         XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 5), .completed)

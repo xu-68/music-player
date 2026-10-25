@@ -45,7 +45,7 @@ struct NowPlayingView: View {
                 .offset(y: drag).scaleEffect(reduceMotion ? 1 : 1 - min(drag / 5000, 0.06), anchor: .bottom)
                 .animation(reduceMotion ? nil : MusicDesign.spring, value: panel)
                 .foregroundStyle(.white).preferredColorScheme(.dark)
-        }.accessibilityAddTraits(.isModal)
+        }.accessibilityElement(children: .contain)
             .fileImporter(isPresented: $importingLyrics,
                           allowedContentTypes: [UTType(filenameExtension: "lrc") ?? .plainText, UTType(filenameExtension: "ttml") ?? .xml, .xml, .plainText]) { result in
                 switch result {
