@@ -150,11 +150,18 @@ actor AudioImporter {
             let allMetadata = try await asset.load(.metadata)
             for item in allMetadata {
                 let key = item.identifier?.rawValue ?? String(describing: item.key)
+                let tag = (item.key as? String ?? key).lowercased()
                 let common = item.commonKey
                 if common == .commonKeyType { track.genre = try? await item.load(.stringValue) }
                 if common == .commonKeyAuthor { track.author = try? await item.load(.stringValue) }
                 if common == .commonKeyCreator { track.composer = try? await item.load(.stringValue) }
                 if common == .commonKeyCreationDate { track.year = try? await item.load(.stringValue) }
+                if tag.contains("tpe2") || tag.contains("albumartist") || tag.contains("album_artist") { track.albumArtist = (try? await item.load(.stringValue)) ?? track.albumArtist }
+                if tag.contains("tcom") || tag.contains("composer") || tag.contains("©wrt") { track.composer = try? await item.load(.stringValue) }
+                if tag.contains("text") || tag.contains("writer") { track.writer = try? await item.load(.stringValue) }
+                if tag.contains("author") { track.author = try? await item.load(.stringValue) }
+                if tag.contains("tcon") || tag.contains("genre") || tag.contains("©gen") { track.genre = try? await item.load(.stringValue) }
+                if tag == "date" || tag.contains("tyer") || tag.contains("tdrc") || tag.contains("tdrl") || tag.contains("©day") { track.year = try? await item.load(.stringValue) }
                 if key.contains("aART") { track.albumArtist = (try? await item.load(.stringValue)) ?? "" }
                 if key.localizedCaseInsensitiveContains("lyrics") || key.contains("©lyr") || key.contains("USLT") {
                     track.embeddedLyrics = try? await item.load(.stringValue)

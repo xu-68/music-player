@@ -9,6 +9,8 @@ for CONFIG in 'wmav2:wma' 'vorbis:ogg' 'opus:opus' 'flac:flac' 'wavpack:wv'; do
     EXTENSION="${CONFIG##*:}"
     ffmpeg -nostdin -hide_banner -loglevel error -y -f lavfi -i 'sine=frequency=440:sample_rate=44100:duration=0.2' \
       -metadata title='Decoder fixture' -metadata artist='Flamingo Tests' \
+      -metadata album='Decoder Album' -metadata album_artist='Flamingo Ensemble' \
+      -metadata composer='Test Composer' -metadata date='2024' \
       -ac 2 -ar 48000 -strict -2 -c:a "$CODEC" "$TARGET/tone.$EXTENSION"
 done
 ffmpeg -nostdin -hide_banner -loglevel error -y -f lavfi -i 'color=c=red:s=64x64:r=24:d=0.25' \

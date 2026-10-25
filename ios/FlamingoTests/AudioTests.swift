@@ -30,6 +30,10 @@ final class AudioTests: XCTestCase {
         let library = LibraryStore()
         await library.addFolders([folder])
         let track = try XCTUnwrap(library.tracks.first { $0.originalFilename == filename + ".flac" })
+        XCTAssertEqual(track.album, "Decoder Album")
+        XCTAssertEqual(track.albumArtist, "Flamingo Ensemble")
+        XCTAssertEqual(track.composer, "Test Composer")
+        XCTAssertTrue(track.year?.hasPrefix("2024") == true)
         XCTAssertEqual(library.lyrics(for: track).first?.text, "Fallback lyric")
         let count = library.tracks.count
         await library.refreshFolders()
