@@ -98,10 +98,10 @@ struct LibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                NavigationLink { PlaylistsView() } label: { LibraryCategory(title: "歌单", symbol: "music.note.list") }
-                NavigationLink { ArtistsView() } label: { LibraryCategory(title: "艺人", symbol: "music.mic") }
-                NavigationLink { AlbumsView() } label: { LibraryCategory(title: "专辑", symbol: "square.stack") }
-                NavigationLink { SongsView(title: "歌曲") } label: { LibraryCategory(title: "歌曲", symbol: "music.note") }
+                NavigationLink { PlaylistsView() } label: { LibraryCategory(title: "歌单", symbol: "music.note.list") }.accessibilityIdentifier("library-playlists")
+                NavigationLink { ArtistsView() } label: { LibraryCategory(title: "艺人", symbol: "music.mic") }.accessibilityIdentifier("library-artists")
+                NavigationLink { AlbumsView() } label: { LibraryCategory(title: "专辑", symbol: "square.stack") }.accessibilityIdentifier("library-albums")
+                NavigationLink { SongsView(title: "歌曲") } label: { LibraryCategory(title: "歌曲", symbol: "music.note") }.accessibilityIdentifier("library-songs")
                 if library.tracks.isEmpty {
                     MusicEmptyState(title: "你的资料库", message: "导入音频后，歌曲将自动按专辑和艺人整理。", actionTitle: "导入音乐", action: importAction)
                         .frame(minHeight: 280)

@@ -64,6 +64,45 @@ final class FlamingoUITests: XCTestCase {
         let paused = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "播放"), object: toggle)
         XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 5), .completed)
     }
+    func testCreatePlaylistWithDuplicateSongsAndRestoreAfterRelaunch() {
+        app.buttons["tab-library"].tap()
+        app.buttons["library-playlists"].tap()
+        app.buttons["新建歌单"].tap()
+        let name = app.textFields["playlist-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Test playlist")
+        app.buttons["playlist-add-songs"].tap()
+        let song = app.buttons["picker-song-海风经过"]
+        XCTAssertTrue(song.waitForExistence(timeout: 5)); song.tap(); song.tap()
+        app.navigationBars["添加歌曲"].buttons["完成"].tap()
+        app.navigationBars["新建歌单"].buttons["完成"].tap()
+        XCTAssertTrue(app.staticTexts["Test playlist"].waitForExistence(timeout: 5))
+        capture("08-playlists")
+        app.terminate()
+        app.launchArguments = ["--ui-testing"]
+        app.launch()
+        app.buttons["tab-library"].tap(); app.buttons["library-playlists"].tap()
+        XCTAssertTrue(app.staticTexts["Test playlist"].waitForExistence(timeout: 5))
+        app.staticTexts["Test playlist"].tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "海风经过，Flamingo Studio")).count, 2)
+        capture("09-playlist-detail")
+    }
+    func testSleepTimerModesAndSettings() {
+        app.buttons["mini-player"].tap()
+        app.buttons["更多播放选项"].tap()
+        app.buttons["睡眠定时"].tap()
+        let start = app.buttons["start-sleep-timer"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5)); start.tap()
+        XCTAssertTrue(app.buttons["取消定时"].waitForExistence(timeout: 5))
+        app.buttons["延长 5 分钟"].tap()
+        capture("10-sleep-timer")
+        app.buttons["取消定时"].tap()
+        XCTAssertFalse(app.buttons["取消定时"].exists)
+        app.navigationBars["睡眠定时"].buttons["完成"].tap()
+        app.buttons["close-player"].tap()
+        app.buttons["设置"].tap()
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
+        capture("11-settings")
+    }
     private func capture(_ name: String) {
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)

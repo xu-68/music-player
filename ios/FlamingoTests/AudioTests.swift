@@ -3,6 +3,40 @@ import XCTest
 @testable import Flamingo
 
 final class AudioTests: XCTestCase {
+    func testImporterUsesFFmpegForWMAAndRetainsTags() async throws {
+        let input = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "tone", withExtension: "wma"))
+        let importer = AudioImporter()
+        let track = try await importer.importAudio(input, systemOnly: false)
+        XCTAssertEqual(track.title, "Decoder fixture")
+        XCTAssertEqual(track.artist, "Flamingo Tests")
+        XCTAssertNotNil(track.decodedFilename)
+        XCTAssertEqual(track.codec, "wmav2")
+        do { _ = try await importer.importAudio(input, systemOnly: true); XCTFail("System-only import should reject WMA on iOS") }
+        catch { XCTAssertNotNil(track.decodedFilename) }
+    }
+    @MainActor func testFolderRefreshDeduplicatesAndFallsBackToLRC() async throws {
+        let defaults = AppPreferences.defaults
+        let old = defaults.object(forKey: "excludeShort")
+        defaults.set(false, forKey: "excludeShort")
+        defer { if let old { defaults.set(old, forKey: "excludeShort") } else { defaults.removeObject(forKey: "excludeShort") } }
+        let folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let input = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "tone", withExtension: "flac"))
+        let filename = UUID().uuidString
+        try FileManager.default.copyItem(at: input, to: folder.appending(path: filename + ".flac"))
+        try "<tt><broken>".write(to: folder.appending(path: filename + ".ttml"), atomically: true, encoding: .utf8)
+        try "[00:00.00]Fallback lyric".write(to: folder.appending(path: filename + ".lrc"), atomically: true, encoding: .utf8)
+        let library = LibraryStore()
+        await library.addFolders([folder])
+        let track = try XCTUnwrap(library.tracks.first { $0.originalFilename == filename + ".flac" })
+        XCTAssertEqual(library.lyrics(for: track).first?.text, "Fallback lyric")
+        let count = library.tracks.count
+        await library.refreshFolders()
+        XCTAssertEqual(library.tracks.count, count)
+        for entry in library.snapshot.folders where entry.name == folder.lastPathComponent { library.removeFolder(entry.id) }
+        library.deleteTrack(track.id); await library.saveNow()
+    }
     func testExtendedAudioFormatsDecodeToPlayablePCM() async throws {
         let folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

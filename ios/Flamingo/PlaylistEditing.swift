@@ -121,9 +121,12 @@ struct PlaylistEditor: View {
                 } header: { Text("\(tracks.count) 首歌曲 · 可重复添加") }
             }.navigationTitle(playlist == nil ? "新建歌单" : "编辑歌单").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button(playlist == nil ? "取消" : "关闭") { cancelled = playlist == nil; if !cancelled { save() }; dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button(playlist == nil ? "取消" : "关闭") {
+                        cancelled = playlist == nil
+                        Task { if !cancelled { save(); await library.saveNow() }; dismiss() }
+                    } }
                     ToolbarItem(placement: .primaryAction) { EditButton() }
-                    ToolbarItem(placement: .confirmationAction) { Button("完成") { save(); dismiss() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                    ToolbarItem(placement: .confirmationAction) { Button("完成") { Task { save(); await library.saveNow(); dismiss() } }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
                 }
                 .onAppear {
                     guard !prepared else { return }; prepared = true
@@ -170,7 +173,7 @@ private struct PlaylistSongPicker: View {
                         if let count = added[track.id] { Text("+\(count)").font(.caption.monospacedDigit()) }
                         Image(systemName: "plus.circle.fill")
                     }
-                }
+                }.accessibilityIdentifier("picker-song-\(track.title)")
             }.navigationTitle("添加歌曲").searchable(text: $query, prompt: "歌曲、艺人或标签")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
                 .task(id: query) {

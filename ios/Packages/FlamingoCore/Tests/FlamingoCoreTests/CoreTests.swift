@@ -82,6 +82,17 @@ final class CoreTests: XCTestCase {
         XCTAssertNil(SleepPlan(mode: .endOfTrack).deadline)
         XCTAssertNil(SleepPlan(mode: .endOfQueue).deadline)
     }
+    func testArtistReleasesClassifyPrimaryAndFeatured() {
+        var album = (0..<7).map { Track(title: "Album song \($0)", artist: "Singer", album: "Album", albumArtist: "Singer", filename: "\($0).wav", duration: 300) }
+        for i in album.indices { album[i].year = "2024" }
+        let single = Track(title: "Single", artist: "Singer", album: "A Single", filename: "single.wav", duration: 180)
+        let feature = Track(title: "Guest", artist: "Other,Singer", album: "Other's Album", albumArtist: "Other", filename: "guest.wav", duration: 200)
+        let catalog = ArtistCatalog.build(album + [single, feature], artist: "Singer", separators: ",")
+        XCTAssertEqual(catalog.albums.count, 1); XCTAssertEqual(catalog.albums[0].count, 7)
+        XCTAssertEqual(catalog.singles[0][0].id, single.id)
+        XCTAssertEqual(catalog.featured[0][0].id, feature.id)
+        XCTAssertEqual(catalog.songs.count, 8)
+    }
     func testTTMLAppleMetadataDuetsAndSecondsAreAbsolute() {
         let xml = #"<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal"><head><metadata><translations><text for="L1">你好</text></translations><transliterations><text for="L1">ni hao</text></transliterations></metadata></head><body><div><p begin="1s" end="4s" itunes:key="L1" ttm:agent="v1"><span begin="1s" end="2s">Hello</span></p><p begin="1s" end="3s" ttm:agent="v2">World</p><p begin="7s" end="8s">End</p></div></body></tt>"#
         let lines = LyricsParser.parse(xml)
