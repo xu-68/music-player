@@ -2,7 +2,7 @@
 
 参考原 Flamingo 对 Apple Music 的交互还原思路，使用 SwiftUI、UIKit、AVFoundation 和 MediaPlayer 重新编写。运行时没有第三方依赖，不链接 Android、Compose、Flutter、React Native、FFmpeg AAR 或 WebView。最低 iOS 17，工程目标包含 iPhone 和 iPad。
 
-**当前状态：原生实现及构建/测试流程已写入；仅完成 Windows 上的语法和结构检查，尚未经过 Xcode 编译、模拟器或真机验收，尚未产出 IPA。**
+**当前状态（2026-10-26）：已上传到用户指定的 `xu-68/music-player` 私有仓库，GitHub Actions / Xcode 16.4 的 10 项核心测试和 2 项模拟器界面/播放测试全部通过；iPhone ARM64 Release 归档成功，已生成并独立校验未签名 IPA，导出 7 张原生截图。真机及一比一视觉验收尚未完成。实际结果见 [验证记录](VALIDATION.zh-CN.md)。**
 
 ## 目录
 
@@ -33,17 +33,17 @@ ios/
 
 ## 使用 GitHub Actions 构建（用户已选择）
 
-仓库根目录已有 `.github/workflows/ios.yml`。将本次新增的 `ios/` 和该工作流提交到你有写入权限的 GitHub Fork 后：
+仓库为 https://github.com/xu-68/music-player ，根目录已有 `.github/workflows/ios.yml`：
 
-1. 打开 Fork 的 **Actions**，允许该 Fork 运行工作流。
+1. 打开仓库的 **Actions**。
 2. 选择 **iOS Native Build** → **Run workflow**。
-3. 工作流在 macOS 上生成 Xcode 工程、运行 Core 单元测试和 iPhone 模拟器测试。
-4. 测试成功后构建真实 iPhone ARM64 应用，归档并生成未签名 IPA。
+3. `build` 任务在 macOS 上运行 Core 单元测试，生成 Xcode 工程，归档并生成真实 iPhone ARM64 未签名 IPA，再验证 Mach-O 平台与包结构。
+4. `ui-tests` 任务在设备包成功后独立运行模拟器界面/播放测试，导出原生截图。必须分别检查两个任务结果；设备编译通过不代表界面测试已通过。
 5. 在构建页面的 Artifacts 下载 `Flamingo-unsigned-ipa`；截图保存在 `Flamingo-test-results` 的 `.xcresult` 附件中，可在 Mac 的 Xcode 打开。
 
 工作流只使用读取仓库权限，不要求上传苹果证书。**未签名 IPA 仍需按你的安装方式签名，无法直接点开安装。** 若工作流失败，应先查看日志并修复，不能把本地语法检查当作远程构建成功。
 
-本次会话未获得可用的 GitHub 写入连接时，不能创建远程 Fork、推送或替你点击运行。连接 GitHub 后可继续处理这些步骤；不要把访问令牌或证书密码写入代码或聊天。
+仓库已由当前账号 `xu-68` 创建并完成推送。它是独立原生仓库，未上传 Android 参考工程、本地校验器依赖或任何认证信息。
 
 ## 在 Mac 本地编译
 
@@ -71,7 +71,7 @@ bash ios/scripts/build.sh signed
 
 ## 自动测试与实际验收
 
-Core 的 9 项测试覆盖：LRC 时间精度/偏移/翻译、多时间戳、逐字时间、TTML 实体/翻译/相对时间/无效 XML、队列循环、随机队列保序与恢复、重复歌曲、随机启动完整性、资料库序列化和时间格式。
+Core 的 10 项测试覆盖：LRC 时间精度/偏移/翻译、多时间戳、逐字时间、TTML 实体/翻译/相对时间/无效 XML、队列循环、随机队列保序与恢复、重复歌曲、删除当前歌曲并保留队列、随机启动完整性、资料库序列化和时间格式。
 
 UI 测试通过显式 `--ui-testing` 参数生成原创低音量测试音频和程序绘制封面，使用 `Documents/FlamingoUITests` 及单独 UserDefaults 套件；依次保存首页、资料库、全屏播放器、歌词、队列和统计截图，验证播放/暂停及歌词跳转。它不以仿造网页代替原生运行。
 
