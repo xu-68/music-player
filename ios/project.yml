@@ -12,8 +12,8 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: '17.0'
     TARGETED_DEVICE_FAMILY: '1,2'
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    MARKETING_VERSION: '1.0.0'
-    CURRENT_PROJECT_VERSION: '1'
+    MARKETING_VERSION: '2.1.0'
+    CURRENT_PROJECT_VERSION: '2'
 packages:
   FlamingoCore:
     path: Packages/FlamingoCore
@@ -67,6 +67,16 @@ targets:
           - UIInterfaceOrientationPortraitUpsideDown
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+  FlamingoTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [FlamingoTests]
+    dependencies:
+      - target: Flamingo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: org.flamingo.local.player.tests
   FlamingoUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -82,11 +92,12 @@ schemes:
     build:
       targets:
         Flamingo: all
+        FlamingoTests: [test]
         FlamingoUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
-      targets: [FlamingoUITests]
+      targets: [FlamingoTests, FlamingoUITests]
     archive:
       config: Release

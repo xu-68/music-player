@@ -12,6 +12,7 @@ enum AppPreferences {
     @AppStorage("appearance", store: AppPreferences.defaults) private var appearance = "system"
 
     init() {
+        PlayerPreferences.register()
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--ui-testing") { DemoLibrary.prepare() }
         #endif
@@ -24,8 +25,9 @@ enum AppPreferences {
             RootView().environment(library).environment(player).tint(MusicDesign.accent)
                 .defaultAppStorage(AppPreferences.defaults)
                 .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
+                .task { if AppPreferences.defaults.bool(forKey: "refreshOnLaunch") { await library.refreshFolders() } }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase != .active { player.flushListening(); Task { await library.saveNow() } }
+                    if phase != .active { player.flushListening(); player.persistQueue(); Task { await library.saveNow() } }
                 }
         }
     }

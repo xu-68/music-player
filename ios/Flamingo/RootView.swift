@@ -15,6 +15,7 @@ struct RootView: View {
     @State private var expanded = false
     @State private var importing = false
     @State private var settings = false
+    @AppStorage("barBlur") private var barBlur = false
     @Namespace private var playerNamespace
 
     private func expandPlayer() { withAnimation(reduceMotion ? .easeOut(duration: 0.15) : MusicDesign.spring) { expanded = true } }
@@ -27,14 +28,14 @@ struct RootView: View {
         ZStack(alignment: .bottom) {
             Color(uiColor: .systemBackground).ignoresSafeArea()
             VStack(spacing: 0) {
-                ZStack {
+                TabView(selection: $tab) {
                     NavigationStack { HomeView(importAction: { importing = true }, settingsAction: { settings = true }) }
-                        .opacity(tab == .home ? 1 : 0).allowsHitTesting(tab == .home).accessibilityHidden(tab != .home)
+                        .tag(MusicTab.home).toolbar(.hidden, for: .tabBar)
                     NavigationStack { LibraryView(importAction: { importing = true }) }
-                        .opacity(tab == .library ? 1 : 0).allowsHitTesting(tab == .library).accessibilityHidden(tab != .library)
+                        .tag(MusicTab.library).toolbar(.hidden, for: .tabBar)
                     NavigationStack { StatsView(settingsAction: { settings = true }) }
-                        .opacity(tab == .stats ? 1 : 0).allowsHitTesting(tab == .stats).accessibilityHidden(tab != .stats)
-                }
+                        .tag(MusicTab.stats).toolbar(.hidden, for: .tabBar)
+                }.toolbar(.hidden, for: .tabBar).clipped()
                 VStack(spacing: 4) {
                     if player.current != nil {
                         MiniPlayer(namespace: playerNamespace, expanded: expanded, open: expandPlayer)
@@ -52,7 +53,10 @@ struct RootView: View {
                                 .accessibilityIdentifier("tab-\(item)")
                         }
                     }
-                }.background(.bar)
+                }.background {
+                    if barBlur { Rectangle().fill(.bar) }
+                    else { Color(uiColor: .systemBackground) }
+                }
             }.accessibilityHidden(expanded).allowsHitTesting(!expanded)
                 .scaleEffect(expanded && !reduceMotion ? 0.96 : 1, anchor: .top)
             if expanded, player.current != nil {
@@ -61,7 +65,7 @@ struct RootView: View {
                     .transition(.asymmetric(insertion: .opacity, removal: .opacity))
             }
         }
-        }.fileImporter(isPresented: $importing, allowedContentTypes: [.audio], allowsMultipleSelection: true) { result in
+        }.fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             switch result {
             case .success(let urls): Task { await library.importFiles(urls) }
             case .failure(let error): library.errorMessage = error.localizedDescription

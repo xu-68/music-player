@@ -15,6 +15,11 @@ struct NowPlayingView: View {
     @State private var drag: CGFloat = 0
     @State private var importingLyrics = false
     @State private var lyricsTarget: UUID?
+    @State private var importingVideo = false
+    @State private var sleepSheet = false
+    @State private var information = false
+    @AppStorage("showVolume") private var showVolume = true
+    @AppStorage("playerCorner") private var corner = 30.0
 
     var body: some View {
         GeometryReader { proxy in
@@ -35,13 +40,13 @@ struct NowPlayingView: View {
                             metadata.padding(.bottom, 10)
                             PlaybackProgressView().padding(.bottom, 12)
                             transport.padding(.bottom, proxy.size.height < 700 ? 12 : 20)
-                            volume.padding(.bottom, 8)
+                            if showVolume { volume.padding(.bottom, 8) }
                             footer.padding(.bottom, 4)
                         }.padding(.horizontal, 30)
                     }
                 }.padding(.top, safeArea.top + 8).padding(.bottom, safeArea.bottom)
                     .frame(maxWidth: 1000).frame(maxWidth: .infinity)
-            }.clipShape(RoundedRectangle(cornerRadius: drag > 0 ? 24 : 0, style: .continuous))
+            }.clipShape(RoundedRectangle(cornerRadius: drag > 0 ? corner : 0, style: .continuous))
                 .offset(y: drag).scaleEffect(reduceMotion ? 1 : 1 - min(drag / 5000, 0.06), anchor: .bottom)
                 .animation(reduceMotion ? nil : MusicDesign.spring, value: panel)
                 .foregroundStyle(.white).preferredColorScheme(.dark)
@@ -54,6 +59,14 @@ struct NowPlayingView: View {
                 case .failure(let error): library.errorMessage = error.localizedDescription
                 }
             }
+            .fileImporter(isPresented: $importingVideo, allowedContentTypes: [.movie, .mpeg4Movie]) { result in
+                switch result {
+                case .success(let url): if let id = lyricsTarget { Task { await library.importVideo(url, for: id) } }
+                case .failure(let error): library.errorMessage = error.localizedDescription
+                }
+            }
+            .sheet(isPresented: $sleepSheet) { NavigationStack { SleepTimerView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { sleepSheet = false } } } } }
+            .sheet(isPresented: $information) { TrackInformationView(track: player.current) }
             .sensoryFeedback(.selection, trigger: panel)
             .accessibilityAction(.escape, close)
     }
@@ -77,7 +90,7 @@ struct NowPlayingView: View {
         case .artwork:
             GeometryReader { proxy in
                 let side = max(80, min(proxy.size.width, proxy.size.height))
-                ArtworkView(track: player.current, radius: 10)
+                AnimatedAlbumArtwork(track: player.current, active: player.isPlaying)
                     .matchedGeometryEffect(id: "player-artwork", in: namespace)
                     .frame(width: side, height: side)
                     .scaleEffect(player.isPlaying ? 1 : 0.83)
@@ -104,10 +117,9 @@ struct NowPlayingView: View {
             Menu {
                 if let track = player.current { TrackActions(track: track) }
                 Button("导入歌词", systemImage: "text.bubble") { lyricsTarget = player.current?.id; importingLyrics = true }
-                Menu("睡眠定时", systemImage: "moon.zzz") {
-                    ForEach([15, 30, 45, 60], id: \.self) { minutes in Button("\(minutes) 分钟后停止") { player.setSleepTimer(minutes: minutes) } }
-                    if player.sleepDeadline != nil { Button("取消定时", role: .destructive) { player.setSleepTimer(minutes: nil) } }
-                }
+                Button("导入动态封面", systemImage: "video") { lyricsTarget = player.current?.id; importingVideo = true }
+                Button("睡眠定时", systemImage: "moon.zzz") { sleepSheet = true }
+                Button("音频信息", systemImage: "info.circle") { information = true }
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 18, weight: .bold)).frame(width: 32, height: 32)
                     .background(.white.opacity(0.12), in: Circle()).frame(width: 44, height: 44)
@@ -200,9 +212,13 @@ private struct ProgressScrubber: View {
 struct LyricsView: View {
     @Environment(PlayerStore.self) private var player
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("lyricBlur") private var blur = true
+    @AppStorage("lyricBlur") private var blur = false
+    @AppStorage("showTranslation") private var translation = true
+    @AppStorage("lyricWeight") private var weight = "ExtraBold"
+    @AppStorage("lyricBalance") private var balance = false
     @State private var following = true
     private var activeIndex: Int? { LyricsParser.activeIndex(in: player.lines, at: player.elapsed) }
+    private var activeLines: Set<Int> { LyricsParser.activeIndices(in: player.lines, at: player.elapsed) }
     var body: some View {
         Group {
             if player.lines.isEmpty {
@@ -217,22 +233,25 @@ struct LyricsView: View {
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 26) {
                                 ForEach(player.lines) { line in
+                                    let active = activeLines.contains(line.id)
+                                    let right = line.agent == "v2"
                                     Button {
                                         player.seek(to: line.start); following = true
                                         scroll(reader, to: line.id)
                                     } label: {
-                                        VStack(alignment: .leading, spacing: 8) {
+                                        VStack(alignment: right ? .trailing : .leading, spacing: 8) {
                                             if line.words.isEmpty {
                                                 Text(line.text.isEmpty ? "•••" : line.text)
-                                                    .font(.system(size: 30, weight: .bold)).tracking(-0.5)
-                                                    .foregroundStyle(.white.opacity(line.id == activeIndex ? 1 : 0.26))
+                                                    .font(.system(size: 30, weight: PlayerPreferences.lyricWeight)).tracking(-0.5)
+                                                    .foregroundStyle(.white.opacity(active ? 1 : 0.26))
+                                                    .multilineTextAlignment(right ? .trailing : .leading)
                                                     .fixedSize(horizontal: false, vertical: true)
                                             } else {
-                                                KaraokeLine(line: line, time: player.elapsed, active: line.id == activeIndex, reduceMotion: reduceMotion)
+                                                KaraokeLine(line: line, time: player.elapsed, active: active, reduceMotion: reduceMotion, balanced: balance, weight: weight)
                                             }
-                                            if let translation = line.translation { Text(translation).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white.opacity(line.id == activeIndex ? 0.8 : 0.3)) }
-                                        }.frame(maxWidth: .infinity, alignment: .leading)
-                                            .scaleEffect(line.id == activeIndex && !reduceMotion ? 1 : 0.97, anchor: .leading)
+                                            if let secondary = translation ? line.translation : line.transliteration { Text(secondary).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white.opacity(active ? 0.8 : 0.3)) }
+                                        }.frame(maxWidth: .infinity, alignment: right ? .trailing : .leading)
+                                            .scaleEffect(active && !reduceMotion ? 1 : 0.97, anchor: right ? .trailing : .leading)
                                             .blur(radius: !following || !blur || reduceMotion || activeIndex == nil ? 0 : min(2.5, Double(abs(line.id - (activeIndex ?? 0))) * 0.65))
                                     }.buttonStyle(.plain).id(line.id)
                                         .accessibilityIdentifier("lyric-\(line.id)")
@@ -266,8 +285,10 @@ private struct KaraokeLine: View {
     var time: Double
     var active: Bool
     var reduceMotion: Bool
+    var balanced: Bool
+    var weight: String
     var body: some View {
-        LyricFlowLayout {
+        LyricFlowLayout(balanced: balanced) {
             ForEach(Array(line.words.enumerated()), id: \.offset) { _, word in
                 let end = word.end ?? line.end ?? word.start + 0.5
                 let progress = active ? min(1, max(0, (time - word.start) / max(0.01, end - word.start))) : 0
@@ -280,17 +301,22 @@ private struct KaraokeLine: View {
                     .offset(y: !reduceMotion && active && progress > 0 && progress < 1 ? -1.5 : 0)
                     .animation(reduceMotion ? nil : .linear(duration: 0.1), value: progress)
             }
-        }.font(.system(size: 30, weight: .bold)).accessibilityElement(children: .ignore).accessibilityLabel(line.text)
+        }.font(.system(size: 30, weight: PlayerPreferences.lyricWeight)).accessibilityElement(children: .ignore).accessibilityLabel(line.text)
     }
 }
 
 private struct LyricFlowLayout: Layout {
+    var balanced = false
     private func layout(width: CGFloat, subviews: Subviews) -> (CGSize, [CGPoint], [CGSize]) {
+        let measured = subviews.map { $0.sizeThatFits(.unspecified).width }
+        let total = measured.reduce(0, +)
+        let longest = measured.max() ?? 0
+        let available = balanced && total > width ? min(width, max(longest, total / ceil(total / max(1, width)) + 12)) : width
         var positions: [CGPoint] = [], sizes: [CGSize] = []
         var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
         for subview in subviews {
             let size = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
-            if x > 0 && x + size.width > width { x = 0; y += rowHeight + 2; rowHeight = 0 }
+            if x > 0 && x + size.width > available { x = 0; y += rowHeight + 2; rowHeight = 0 }
             positions.append(CGPoint(x: x, y: y)); sizes.append(size)
             x += size.width; rowHeight = max(rowHeight, size.height)
         }
@@ -311,11 +337,16 @@ private struct LyricFlowLayout: Layout {
 struct QueueView: View {
     @Environment(PlayerStore.self) private var player
     @Environment(LibraryStore.self) private var library
+    @State private var editMode = EditMode.inactive
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) { Text("待播清单").font(.title2.bold()); Text("\(player.queue.upcoming.count) 首待播歌曲").font(.subheadline).foregroundStyle(.white.opacity(0.5)) }
                 Spacer()
+                Menu {
+                    Button(editMode == .active ? "完成排序" : "调整顺序", systemImage: "arrow.up.arrow.down") { editMode = editMode == .active ? .inactive : .active }
+                    Button("清空待播歌曲", role: .destructive) { player.clearUpcoming() }
+                } label: { Image(systemName: "ellipsis").frame(width: 32, height: 36) }
                 Button(action: player.toggleShuffle) {
                     Image(systemName: "shuffle").frame(width: 40, height: 36)
                         .background(player.queue.shuffled ? .white.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 8))
@@ -325,22 +356,29 @@ struct QueueView: View {
                         .background(player.queue.repeatMode != .off ? .white.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 8))
                 }.accessibilityLabel("循环模式").accessibilityValue(player.queue.repeatMode == .off ? "关闭" : player.queue.repeatMode == .all ? "列表循环" : "单曲循环")
             }
-            ScrollView {
-                LazyVStack(spacing: 0) {
+            List {
                     if let current = player.current {
-                        queueRow(current, current: true) {}.padding(.bottom, 16)
+                        queueRow(current, current: true) {}.padding(.bottom, 16).listRowBackground(Color.clear)
                     }
                     ForEach(player.queue.upcoming) { entry in
                         if let track = library.track(entry.trackID) {
                             HStack {
                                 queueRow(track, current: false) { player.selectQueueEntry(entry.id) }
-                                Button { player.removeQueueEntry(entry.id) } label: { Image(systemName: "minus.circle").frame(width: 40, height: 44) }.accessibilityLabel("从待播清单移除 \(track.title)")
-                            }
-                            Divider().overlay(.white.opacity(0.08)).padding(.leading, 60)
+                            }.contextMenu {
+                                Button("移至下一首", systemImage: "text.line.first.and.arrowtriangle.forward") { player.moveQueueEntryNext(entry.id) }
+                                Button("移除", role: .destructive) { player.removeQueueEntry(entry.id) }
+                            }.swipeActions(edge: .leading) { Button("下一首") { player.moveQueueEntryNext(entry.id) }.tint(MusicDesign.accent) }
+                                .listRowBackground(Color.clear)
                         }
+                    }.onDelete { offsets in
+                        let ids = offsets.map { player.queue.upcoming[$0].id }
+                        for id in ids { player.removeQueueEntry(id) }
+                    }.onMove { offsets, destination in
+                        let start = player.queue.index + 1
+                        player.moveQueueEntries(from: IndexSet(offsets.map { $0 + start }), to: destination + start)
                     }
-                }
-            }.scrollIndicators(.hidden)
+            }.listStyle(.plain).scrollContentBackground(.hidden).environment(\.editMode, $editMode)
+                .scrollIndicators(.hidden)
         }
     }
     private func queueRow(_ track: Track, current: Bool, action: @escaping () -> Void) -> some View {
@@ -355,5 +393,29 @@ struct QueueView: View {
                 if current { Image(systemName: "waveform").foregroundStyle(.white.opacity(0.7)) }
             }.padding(.vertical, 7).contentShape(Rectangle())
         }.buttonStyle(.plain).disabled(current)
+    }
+}
+
+private struct TrackInformationView: View {
+    var track: Track?
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let track {
+                    Section("标签") { LabeledContent("标题", value: track.title); LabeledContent("艺人", value: track.artist); LabeledContent("专辑", value: track.album) }
+                    Section("音频") {
+                        LabeledContent("文件", value: track.originalFilename ?? track.filename)
+                        LabeledContent("解码", value: track.decodedFilename == nil ? "系统" : "FFmpeg → PCM")
+                        LabeledContent("编码", value: track.codec ?? (track.filename as NSString).pathExtension.uppercased())
+                        if let rate = track.sampleRate { LabeledContent("采样率", value: "\(String(format: "%.1f", rate / 1000)) kHz") }
+                        if let bits = track.bitsPerSample, bits > 0 { LabeledContent("位深", value: "\(bits) bit") }
+                        if let bitrate = track.bitRate, bitrate > 0 { LabeledContent("码率", value: "\(bitrate / 1000) kbps") }
+                        LabeledContent("时长", value: PlaybackTime.label(track.duration))
+                    }
+                }
+            }.navigationTitle("音频信息").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
+        }
     }
 }

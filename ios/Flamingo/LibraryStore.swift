@@ -11,9 +11,11 @@ enum LibraryPaths {
     static let audio = root.appending(path: "Audio", directoryHint: .isDirectory)
     static let artwork = root.appending(path: "Artwork", directoryHint: .isDirectory)
     static let lyrics = root.appending(path: "Lyrics", directoryHint: .isDirectory)
+    static let video = root.appending(path: "Video", directoryHint: .isDirectory)
+    static let decoded = root.appending(path: "Decoded", directoryHint: .isDirectory)
     static let database = root.appending(path: "Library.json")
     static func prepare() throws {
-        for url in [root, audio, artwork, lyrics] {
+        for url in [root, audio, artwork, lyrics, video, decoded] {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }
     }
@@ -40,8 +42,13 @@ private actor LibraryDisk {
     }
 }
 
-private actor AudioImporter {
-    func importAudio(_ source: URL) async throws -> Track {
+actor AudioImporter {
+    static let extensions: Set<String> = ["mp3", "m4a", "mp4", "aac", "wav", "wave", "flac", "alac", "aif", "aiff", "caf", "ogg", "oga", "opus", "wma", "ape", "wv", "tta", "tak", "mka", "ac3", "dts", "amr", "mp2", "mpc", "3gp"]
+    func files(in folder: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(at: folder, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else { return [] }
+        return enumerator.compactMap { $0 as? URL }.filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
+    }
+    func importAudio(_ source: URL, systemOnly: Bool) async throws -> Track {
         let granted = source.startAccessingSecurityScopedResource()
         defer { if granted { source.stopAccessingSecurityScopedResource() } }
         try LibraryPaths.prepare()
@@ -60,10 +67,18 @@ private actor AudioImporter {
             try FileManager.default.moveItem(at: staging, to: destination)
         }
         do {
-            let asset = AVURLAsset(url: destination)
-            let playable = try await asset.load(.isPlayable)
+            var asset = AVURLAsset(url: destination)
+            let playable = (try? await asset.load(.isPlayable)) ?? false
+            var decodedName: String?
+            var fallbackTags: [String: String] = [:]
+            if !playable && !systemOnly {
+                let name = fingerprint + ".caf"
+                fallbackTags = try NativeDecoder.decode(destination, output: LibraryPaths.decoded.appending(path: name))
+                decodedName = name
+                asset = AVURLAsset(url: LibraryPaths.decoded.appending(path: name))
+            }
             let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-            guard playable, !audioTracks.isEmpty else {
+            guard !audioTracks.isEmpty, try await asset.load(.isPlayable) else {
                 throw CocoaError(.fileReadCorruptFile)
             }
             let metadata = try await asset.load(.commonMetadata)
@@ -76,6 +91,40 @@ private actor AudioImporter {
                               artist: await string(.commonKeyArtist) ?? "未知艺人",
                               album: await string(.commonKeyAlbumName) ?? "未知专辑", filename: filename,
                               duration: duration.isFinite ? duration : 0)
+            track.originalFilename = source.lastPathComponent
+            track.modifiedAt = try? source.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            track.decodedFilename = decodedName
+            if !fallbackTags.isEmpty {
+                track.title = fallbackTags["title"] ?? track.title
+                track.artist = fallbackTags["artist"] ?? track.artist
+                track.album = fallbackTags["album"] ?? track.album
+                track.albumArtist = fallbackTags["album_artist"] ?? ""
+                track.embeddedLyrics = fallbackTags["lyrics"] ?? fallbackTags["LYRICS"]
+                track.trackNumber = Int((fallbackTags["track"] ?? "0").split(separator: "/").first ?? "0") ?? 0
+                track.discNumber = Int((fallbackTags["disc"] ?? "0").split(separator: "/").first ?? "0") ?? 0
+                track.codec = fallbackTags["codec"]
+                track.sampleRate = fallbackTags["sampleRate"].flatMap(Double.init)
+                track.bitsPerSample = fallbackTags["bitsPerSample"].flatMap(Int.init)
+                track.bitRate = fallbackTags["bitRate"].flatMap(Int.init)
+                if let decodedName {
+                    let cover = LibraryPaths.decoded.appending(path: decodedName).appendingPathExtension("cover")
+                    if FileManager.default.fileExists(atPath: cover.path) {
+                        let name = fingerprint + ".cover"
+                        let target = LibraryPaths.artwork.appending(path: name)
+                        try? FileManager.default.removeItem(at: target)
+                        try FileManager.default.moveItem(at: cover, to: target)
+                        track.artworkFilename = name
+                    }
+                }
+            } else if let audio = audioTracks.first,
+                      let formats = try? await audio.load(.formatDescriptions), let format = formats.first,
+                      let description = CMAudioFormatDescriptionGetStreamBasicDescription(format)?.pointee {
+                track.sampleRate = description.mSampleRate
+                track.bitsPerSample = Int(description.mBitsPerChannel)
+                let code = description.mFormatID
+                track.codec = String(bytes: [UInt8((code >> 24) & 255), UInt8((code >> 16) & 255), UInt8((code >> 8) & 255), UInt8(code & 255)], encoding: .ascii)
+                track.bitRate = (try? await audio.load(.estimatedDataRate)).map { Int($0) }
+            }
             if let item = metadata.first(where: { $0.commonKey == .commonKeyArtwork }),
                let data = try? await item.load(.dataValue), let image = UIImage(data: data) {
                 let size = image.size
@@ -136,6 +185,18 @@ private actor AudioImporter {
     }
     var tracks: [Track] { snapshot.tracks }
     var playlists: [Playlist] { snapshot.playlists }
+    func artists(for track: Track) -> [String] {
+        let separators = AppPreferences.defaults.string(forKey: "artistSeparators") ?? ","
+        let values = track.artist.components(separatedBy: CharacterSet(charactersIn: separators))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        return values.isEmpty ? [track.artist] : values
+    }
+    func toggleFollow(_ artist: String) {
+        guard ready else { return }
+        if snapshot.followedArtists.contains(artist) { snapshot.followedArtists.removeAll { $0 == artist } }
+        else { snapshot.followedArtists.append(artist) }
+        scheduleSave()
+    }
     func track(_ id: UUID) -> Track? { tracks.first { $0.id == id } }
     func tracks(for playlist: Playlist) -> [Track] { playlist.trackIDs.compactMap(track) }
     var albums: [[Track]] {
@@ -156,37 +217,114 @@ private actor AudioImporter {
         do { try await disk.save(snapshot) }
         catch { errorMessage = "保存资料库失败：\(error.localizedDescription)" }
     }
-    func importFiles(_ urls: [URL]) async {
+    func importFiles(_ urls: [URL], folderID: UUID? = nil, quiet: Bool = false) async {
         guard ready, !importing else { return }
         importing = true
         defer { importing = false; importProgress = "" }
         var report = ImportReport()
-        for (index, url) in urls.enumerated() {
-            importProgress = "\(index + 1) / \(urls.count) · \(url.lastPathComponent)"
+        let audio = urls.filter { AudioImporter.extensions.contains($0.pathExtension.lowercased()) && $0.deletingLastPathComponent().lastPathComponent != "anim" }
+        for (index, url) in audio.enumerated() {
+            importProgress = "\(index + 1) / \(audio.count) · \(url.lastPathComponent)"
             do {
-                let track = try await importer.importAudio(url)
-                if tracks.contains(where: { $0.filename == track.filename }) { report.duplicates += 1 }
-                else { snapshot.tracks.append(track); report.imported += 1 }
-            } catch { report.failures.append("\(url.lastPathComponent)：无法读取或不支持此音频格式。") }
+                var track = try await importer.importAudio(url, systemOnly: AppPreferences.defaults.bool(forKey: "systemDecoderOnly"))
+                track.sourceFolderID = folderID
+                if let existing = tracks.first(where: { $0.filename == track.filename }) {
+                    track = existing; report.duplicates += 1
+                } else if AppPreferences.defaults.bool(forKey: "excludeShort"), track.duration < 60 {
+                    try? FileManager.default.removeItem(at: LibraryPaths.audio.appending(path: track.filename))
+                    if let name = track.decodedFilename { try? FileManager.default.removeItem(at: LibraryPaths.decoded.appending(path: name)) }
+                    continue
+                } else { snapshot.tracks.append(track); report.imported += 1 }
+                let stem = url.deletingPathExtension().lastPathComponent
+                let candidates = urls.filter { $0.deletingPathExtension().lastPathComponent.caseInsensitiveCompare(stem) == .orderedSame }
+                for ext in ["ttml", "xml", "lrc"] {
+                    if let sidecar = candidates.first(where: { $0.pathExtension.lowercased() == ext }),
+                       await attachLyrics(sidecar, for: track.id) { break }
+                }
+                if let video = urls.first(where: {
+                    ["mp4", "mov", "m4v"].contains($0.pathExtension.lowercased()) &&
+                    ($0.deletingPathExtension().lastPathComponent == stem && $0 != url ||
+                     $0.deletingLastPathComponent().lastPathComponent == "anim" && $0.deletingPathExtension().lastPathComponent == Self.safeAlbumName(track.album))
+                }) { await importVideo(video, for: track.id) }
+            } catch { report.failures.append("\(url.lastPathComponent)：\(error.localizedDescription)") }
+        }
+        for sidecar in urls where ["ttml", "xml", "lrc"].contains(sidecar.pathExtension.lowercased()) {
+            let stem = sidecar.deletingPathExtension().lastPathComponent
+            for track in tracks where (track.originalFilename as NSString?)?.deletingPathExtension == stem {
+                if sidecar.pathExtension.lowercased() == "lrc", let name = track.lyricsFilename, ["ttml", "xml"].contains((name as NSString).pathExtension) { continue }
+                _ = await attachLyrics(sidecar, for: track.id)
+            }
         }
         await saveNow()
-        importMessage = report.message
+        if !quiet || !report.failures.isEmpty { importMessage = report.message }
+    }
+    static func safeAlbumName(_ album: String) -> String {
+        album.components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|")).joined(separator: "_").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    func addFolders(_ urls: [URL]) async {
+        guard ready else { return }
+        for url in urls {
+            let access = url.startAccessingSecurityScopedResource()
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            do {
+                let bookmark = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+                if !snapshot.folders.contains(where: { $0.bookmark == bookmark }) { snapshot.folders.append(MusicFolder(name: url.lastPathComponent, bookmark: bookmark)) }
+            } catch { errorMessage = "文件夹授权失败：\(error.localizedDescription)" }
+        }
+        await saveNow(); await refreshFolders()
+    }
+    func removeFolder(_ id: UUID) { snapshot.folders.removeAll { $0.id == id }; scheduleSave() }
+    func refreshFolders() async {
+        guard !importing else { return }
+        for folder in snapshot.folders {
+            do {
+                var stale = false
+                let url = try URL(resolvingBookmarkData: folder.bookmark, options: [.withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale)
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                if stale, let i = snapshot.folders.firstIndex(where: { $0.id == folder.id }) {
+                    snapshot.folders[i].bookmark = try url.bookmarkData(options: .minimalBookmark, includingResourceValuesForKeys: nil, relativeTo: nil)
+                }
+                await importFiles(await importer.files(in: url), folderID: folder.id, quiet: true)
+            } catch { errorMessage = "无法刷新“\(folder.name)”，请重新授权该文件夹：\(error.localizedDescription)" }
+        }
+    }
+    func importVideo(_ url: URL, for id: UUID) async {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let asset = AVURLAsset(url: url)
+            guard !(try await asset.loadTracks(withMediaType: .video)).isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+            let name = id.uuidString + "." + url.pathExtension.lowercased()
+            let target = LibraryPaths.video.appending(path: name)
+            if target != url {
+                let staging = LibraryPaths.video.appending(path: UUID().uuidString)
+                try FileManager.default.copyItem(at: url, to: staging)
+                try? FileManager.default.removeItem(at: target)
+                try FileManager.default.moveItem(at: staging, to: target)
+            }
+            if let i = snapshot.tracks.firstIndex(where: { $0.id == id }) { snapshot.tracks[i].videoFilename = name; scheduleSave() }
+        } catch { errorMessage = "动态封面导入失败：\(error.localizedDescription)" }
     }
     func importLyrics(_ url: URL, for id: UUID) async {
-        guard ready, let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return }
+        if !(await attachLyrics(url, for: id)) { errorMessage = "未能解析歌词，请选择 UTF-8 或 UTF-16 编码的 LRC / TTML 文件。" }
+    }
+    @discardableResult private func attachLyrics(_ url: URL, for id: UUID) async -> Bool {
+        guard ready, let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return false }
         let granted = url.startAccessingSecurityScopedResource()
         defer { if granted { url.stopAccessingSecurityScopedResource() } }
         do {
             let data = try Data(contentsOf: url)
             guard let text = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16),
                   !LyricsParser.parse(text).isEmpty else {
-                errorMessage = "未能解析歌词，请选择 UTF-8 或 UTF-16 编码的 LRC / TTML 文件。"; return
+                return false
             }
             let name = id.uuidString + "." + url.pathExtension.lowercased()
             try data.write(to: LibraryPaths.lyrics.appending(path: name), options: .atomic)
             snapshot.tracks[i].lyricsFilename = name
             scheduleSave()
-        } catch { errorMessage = "导入歌词失败：\(error.localizedDescription)" }
+            return true
+        } catch { return false }
     }
     func lyrics(for track: Track) -> [LyricLine] {
         if let name = track.lyricsFilename, let data = try? Data(contentsOf: LibraryPaths.lyrics.appending(path: name)),
@@ -198,17 +336,38 @@ private actor AudioImporter {
         snapshot.tracks[i].isFavorite.toggle(); scheduleSave()
     }
     func markPlayed(_ id: UUID) {
-        guard ready, let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return }
+        guard ready, AppPreferences.defaults.bool(forKey: "listeningHistory"), let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return }
         snapshot.tracks[i].lastPlayedAt = Date(); scheduleSave()
+        let recent = tracks.filter { $0.lastPlayedAt != nil }.sorted { $0.lastPlayedAt! > $1.lastPlayedAt! }
+        let old = Set(recent.dropFirst(50).map(\.id))
+        for i in snapshot.tracks.indices where old.contains(snapshot.tracks[i].id) { snapshot.tracks[i].lastPlayedAt = nil }
     }
-    func recordListening(_ id: UUID, seconds: Double) {
-        guard ready, seconds > 0, seconds.isFinite else { return }
-        let today = Calendar.current.startOfDay(for: Date())
-        if let i = snapshot.sessions.firstIndex(where: { $0.trackID == id && Calendar.current.isDate($0.date, inSameDayAs: today) }) {
-            snapshot.sessions[i].seconds += seconds
-        } else { snapshot.sessions.append(.init(trackID: id, date: today, seconds: seconds)) }
+    func recordListening(_ id: UUID, sessionID: UUID, seconds: Double, qualified: Bool) {
+        guard ready, AppPreferences.defaults.bool(forKey: "listeningHistory"), seconds > 0, seconds.isFinite, let track = track(id) else { return }
+        if let i = snapshot.sessions.firstIndex(where: { $0.id == sessionID }) {
+            snapshot.sessions[i].seconds = seconds
+            snapshot.sessions[i].countsAsPlay = qualified
+        } else {
+            var session = ListeningSession(trackID: id, seconds: seconds)
+            session.id = sessionID; session.title = track.title; session.artist = track.artist; session.album = track.album
+            session.countsAsPlay = qualified
+            snapshot.sessions.append(session)
+        }
         scheduleSave()
     }
+    func importStatistics(_ url: URL, merge: Bool) throws {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        snapshot.sessions = try ListeningBackup.restore(Data(contentsOf: url), into: snapshot.sessions.filter { $0.countsAsPlay != false }, tracks: tracks, merge: merge)
+        scheduleSave()
+    }
+    func exportStatistics() throws -> URL {
+        let target = LibraryPaths.root.appending(path: "Flamingo-Statistics.json")
+        try ListeningBackup.export(snapshot.sessions.filter { $0.countsAsPlay != false }, tracks: tracks).write(to: target, options: .atomic)
+        return target
+    }
+    func clearStatistics() { snapshot.sessions = []; scheduleSave() }
+    func clearHistory() { for i in snapshot.tracks.indices { snapshot.tracks[i].lastPlayedAt = nil }; scheduleSave() }
     func createPlaylist(_ name: String, tracks: [UUID] = []) {
         guard ready, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         snapshot.playlists.append(.init(name: name.trimmingCharacters(in: .whitespacesAndNewlines), trackIDs: tracks)); scheduleSave()
@@ -219,6 +378,10 @@ private actor AudioImporter {
     }
     func deletePlaylist(_ id: UUID) {
         guard ready else { return }; snapshot.playlists.removeAll { $0.id == id }; scheduleSave()
+    }
+    func restorePlaylist(_ playlist: Playlist) {
+        guard ready, !snapshot.playlists.contains(where: { $0.id == playlist.id }) else { return }
+        snapshot.playlists.append(playlist); scheduleSave()
     }
     func add(_ trackID: UUID, to playlistID: UUID) {
         guard ready, let i = snapshot.playlists.firstIndex(where: { $0.id == playlistID }),
@@ -235,6 +398,8 @@ private actor AudioImporter {
             try? FileManager.default.removeItem(at: LibraryPaths.artwork.appending(path: name))
         }
         if let name = track.lyricsFilename { try? FileManager.default.removeItem(at: LibraryPaths.lyrics.appending(path: name)) }
+        if let name = track.videoFilename { try? FileManager.default.removeItem(at: LibraryPaths.video.appending(path: name)) }
+        if let name = track.decodedFilename { try? FileManager.default.removeItem(at: LibraryPaths.decoded.appending(path: name)) }
         scheduleSave()
     }
 }

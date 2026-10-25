@@ -43,7 +43,7 @@ struct FlowingArtworkBackground: View {
     var active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("animatedBackground") private var animated = true
+    @AppStorage("animatedBackground") private var animated = false
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !active || reduceMotion || !animated || scenePhase != .active)) { context in
             let phase = reduceMotion || !animated ? 0 : context.date.timeIntervalSinceReferenceDate / 12
