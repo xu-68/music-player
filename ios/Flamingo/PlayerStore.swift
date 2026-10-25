@@ -65,11 +65,11 @@ import Observation
             queue.replace(with: [id]); loadCurrent(autoplay: false)
         }
     }
-    func play(_ track: Track, in tracks: [Track]? = nil, shuffled: Bool = false) {
+    func play(_ track: Track, in tracks: [Track]? = nil, shuffled: Bool = false, startingAt: Int? = nil) {
         flushListening()
         var source = tracks ?? library.tracks
         if !source.contains(where: { $0.id == track.id }) { source.append(track) }
-        let index = source.firstIndex(where: { $0.id == track.id }) ?? 0
+        let index = startingAt.flatMap { source.indices.contains($0) && source[$0].id == track.id ? $0 : nil } ?? source.firstIndex(where: { $0.id == track.id }) ?? 0
         queue.replace(with: source.isEmpty ? [track.id] : source.map(\.id), startingAt: index, shuffled: shuffled)
         loadCurrent(autoplay: true)
     }

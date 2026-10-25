@@ -1,13 +1,11 @@
 # music-player
 
-A native iOS local music player inspired by Flamingo's classic Apple Music-style interactions. Built with SwiftUI, UIKit, AVFoundation and MediaPlayer. iOS 17 or later. No third-party runtime dependencies.
+Native iOS reconstruction of Flamingo v2.1.0 using SwiftUI, UIKit, AVFoundation and a locally compiled FFmpeg audio decoder. iOS 17+, iPhone and iPad. No Android framework or cross-platform UI runtime.
 
-See [implementation and build instructions](ios/README.zh-CN.md), [design notes](ios/DESIGN-NOTES.zh-CN.md) and [validation status](ios/VALIDATION.zh-CN.md).
+Includes folder scanning, advanced LRC/TTML lyrics, local animated artwork, complete queue and sleep controls, playlist editing with duplicates/custom covers/pins, artist releases, and portable listening-statistics backups. Online artwork lookup is excluded at the user's request.
 
-GitHub Actions runs core and simulator tests, archives the device app, and uploads a verified unsigned ARM64 IPA. The unsigned IPA requires signing before installation.
+See [features and build instructions](ios/README.zh-CN.md), [source-based parity audit](ios/PARITY.md), and [actual validation results](ios/VALIDATION.zh-CN.md).
 
-Inspired by [Flamingo](https://github.com/shouryadixitisverycool/Flamingo). GPL-3.0; see LICENSE.
+GitHub Actions builds a verified unsigned ARM64 IPA and runs core, native playback/decoder and UI regression tests. The IPA requires signing before installation. Simulator test coverage does not establish real-device performance or exact visual and animation parity.
 
-Validated build: [GitHub Actions run 40224260658](https://github.com/xu-68/music-player/actions/runs/40224260658), source commit `9531386`. All 10 core tests and 2 simulator UI/playback tests passed. The unsigned ARM64 device IPA is 441,399 bytes and requires iOS 17 or later.
-
-Native screenshots from the iPhone 16 Pro simulator use explicitly generated, isolated test music and artwork; these fixtures are excluded from Release builds. Screenshots are available in [docs/screenshots](docs/screenshots). This demonstrates native rendering and test coverage, not a completed pixel-by-pixel or real-device performance comparison with Apple Music.
+Based on ideas and behavior from [Flamingo](https://github.com/shouryadixitisverycool/Flamingo), upstream v2.1.0 / `290a792`. GPL-3.0; see LICENSE. FFmpeg 7.1.5 is built reproducibly from official source without GPL or nonfree components.

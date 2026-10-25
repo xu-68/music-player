@@ -34,6 +34,13 @@ final class AudioTests: XCTestCase {
         let count = library.tracks.count
         await library.refreshFolders()
         XCTAssertEqual(library.tracks.count, count)
+        let video = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "cover", withExtension: "mp4"))
+        await library.importVideo(video, for: track.id)
+        let updated = try XCTUnwrap(library.track(track.id))
+        let videoName = try XCTUnwrap(updated.videoFilename)
+        let asset = AVURLAsset(url: LibraryPaths.video.appending(path: videoName))
+        let videoTracks = try await asset.loadTracks(withMediaType: .video)
+        XCTAssertFalse(videoTracks.isEmpty)
         for entry in library.snapshot.folders where entry.name == folder.lastPathComponent { library.removeFolder(entry.id) }
         library.deleteTrack(track.id); await library.saveNow()
     }

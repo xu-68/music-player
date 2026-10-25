@@ -2,17 +2,6 @@ import AVFoundation
 import FlamingoCore
 import SwiftUI
 
-actor AnimatedArtworkService {
-    static let shared = AnimatedArtworkService()
-    private let directory = URL.cachesDirectory.appending(path: "AnimatedArtwork", directoryHint: .isDirectory)
-    func size() -> Int64 {
-        (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey]))?.reduce(0) {
-            $0 + Int64((try? $1.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-        } ?? 0
-    }
-    func clear() { try? FileManager.default.removeItem(at: directory) }
-}
-
 struct AnimatedAlbumArtwork: View {
     var track: Track?
     var active: Bool
@@ -46,7 +35,7 @@ private struct LoopingVideo: UIViewRepresentable {
         var url: URL?
         let player = AVQueuePlayer()
         var looper: AVPlayerLooper?
-        init() { player.isMuted = true; player.allowsExternalPlayback = false }
+        init() { player.isMuted = true; player.allowsExternalPlayback = false; player.preventsDisplaySleepDuringVideoPlayback = false }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> VideoLayerView {

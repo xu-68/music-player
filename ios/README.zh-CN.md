@@ -1,102 +1,56 @@
-# Flamingo · 原生 iOS 版
+# Flamingo 原生 iOS
 
-参考原 Flamingo 对 Apple Music 的交互还原思路，使用 SwiftUI、UIKit、AVFoundation 和 MediaPlayer 重新编写。运行时没有第三方依赖，不链接 Android、Compose、Flutter、React Native、FFmpeg AAR 或 WebView。最低 iOS 17，工程目标包含 iPhone 和 iPad。
+以 Flamingo v2.1.0（上游提交 `290a792`）为参照，以 SwiftUI、UIKit、AVFoundation、MediaPlayer 重写，支持 iOS 17 以上的 iPhone 和 iPad。Android、Compose、ExoPlayer、MMKV 和 AAR 不参与构建。FFmpeg 7.1.5 作为本地音频解码依赖，从官方源码构建静态库；界面仍全部为原生视图。
 
-**当前状态（2026-10-26）：已上传到用户指定的 `xu-68/music-player` 私有仓库，GitHub Actions / Xcode 16.4 的 10 项核心测试和 2 项模拟器界面/播放测试全部通过；iPhone ARM64 Release 归档成功，已生成并独立校验未签名 IPA，导出 7 张原生截图。真机及一比一视觉验收尚未完成。实际结果见 [验证记录](VALIDATION.zh-CN.md)。**
+## 功能
 
-## 目录
+- 原版经典三标签布局、推荐卡片与最近播放；连续四首以上同专辑的历史合并为专辑卡片。
+- 文件批量导入、SHA-256 去重、文件夹授权与递归刷新、启动刷新、短音频过滤、同名歌词和 `anim/专辑名.mp4` 匹配。
+- 歌曲、专辑和艺人搜索；标题、时长、艺人、修改日期排序；艺人拆分与关注；艺人专辑、单曲/EP 和参与发行分类。
+- 歌单名称、描述、照片封面与 0–4 张独立封面拼图；允许重复歌曲、逐项删除、多选移除、拖动排序、模糊搜索、置顶及置顶顺序、批量加入其他歌单、删除撤销。
+- AVPlayer 播放与系统解码；自动模式下，系统无法读取的音频通过 FFmpeg 解码为本地 Float32 PCM/CAF，再由原生播放器播放。保留原文件用于分享。转换缓存会增加磁盘占用，并非把解码后的音频内置到 IPA。
+- 队列添加、下一首/最后播放、调整顺序、滑动移除/移至下一首、清空待播、随机及三种循环；恢复完整队列和播放进度，重启不自动发声。
+- 200ms 播放/暂停淡入淡出；倒计时、本首结束和队列结束三种睡眠模式，可延长/取消，支持 0/5/10/30 秒淡出。
+- 内嵌歌词与同名 LRC/TTML/XML；TTML 优先且损坏时回退 LRC；多时间戳、逐字、重复时间戳翻译、Apple TTML 翻译/音译、重叠行共同聚焦、v2 对唱靠右、间奏提示、字体权重、平衡换行、模糊、点击跳转与跟随。
+- 本地静音循环视频封面及专辑黑名单。**按用户明确选择，不接入在线封面服务，不上传歌曲元数据。**
+- 最近 50 首与历史开关；日/周/月/年/全部统计、跨日时长、播放过半计数、歌曲/艺人/专辑排行；移除音频后保留统计标签；原版统计 JSON 导入、合并去重、覆盖、导出和清空确认。
+- 迷你播放器共享封面转场、下拉关闭、暂停缩放、封面背景动画；音量条、深浅色、栏模糊、圆角和减弱动态效果设置。
+- 后台音频、锁屏信息与远程控制、耳机断开/音频中断处理、系统音量、AirPlay、文件分享及从“文件”打开导入。
 
-```
-ios/
-  ASSESSMENT.zh-CN.md        迁移前评估、范围与限制
-  DESIGN-NOTES.zh-CN.md      从原项目提炼的视觉和动画规则
-  project.yml               XcodeGen 工程定义
-  Flamingo/                 原生应用、播放器、导入和界面
-  Packages/FlamingoCore/     无 UI 依赖的模型、队列、LRC/TTML 解析
-  FlamingoUITests/           模拟器交互与截图测试
-  scripts/build.sh           Mac 构建、测试、IPA 打包
-  scripts/validate.py        Windows/macOS 静态检查
-```
+逐项依据与验证记录见 [PARITY.md](PARITY.md) 和 [VALIDATION.zh-CN.md](VALIDATION.zh-CN.md)。存在代码不等于硬件和视觉效果已经验收；不能把模拟器测试说成实机测得 120 FPS 或像素、运动曲线完全相同。
 
-## 已实现的代码路径
+## 构建
 
-- 从系统文件选择器批量导入音频，复制文件、读取标题/歌手/专辑/序号/封面，SHA-256 去重；不支持或损坏的文件单独报告，不中断其他导入。
-- 首页横向精选和最近播放、资料库分类、专辑详情、歌手、歌曲搜索、收藏、创建/编辑/重排歌单和删除确认。
-- AVPlayer 本地播放、进度拖动、上一首/下一首、随机队列、列表循环和单曲循环、睡眠定时。
-- 音频会话、后台音频、锁屏元数据和远程播放控制、AirPlay 路由选择、真实系统音量、耳机拔出暂停和音频中断处理。
-- 经典底部三个标签页、迷你播放器、共享封面展开、下拉关闭、暂停封面缩放与阴影、专辑封面驱动的缓慢背景运动。
-- 导入外部 LRC/TTML，读取能通过 AVFoundation 暴露的嵌入歌词；时间偏移、重复时间戳翻译、增强 LRC 逐字时间、常见 TTML p/span 时间、自动跟随、点击跳转与逐字遮罩点亮。
-- JSON 原子持久化、实际播放时间统计、独立的界面测试数据目录与偏好套件；正式启动不会填充测试音乐。
-- 系统深浅色、VoiceOver 操作标签与进度调整、系统减弱动态效果适配；使用系统文本样式的列表支持动态字体。播放器与歌词仍需针对最大辅助字号继续实机验收。
+仓库：[xu-68/music-player](https://github.com/xu-68/music-player)。Actions 的 **iOS Native Build** 自动执行：
 
-代码存在不表示这些能力已经在设备上验证。特别是后台播放、中断、iCloud 文件导入、音频格式与性能，需要按下面的清单验证。
+1. 编译并缓存 FFmpeg 的 iPhone ARM64 与模拟器 ARM64 静态 XCFramework。
+2. 运行 FlamingoCore 测试，归档 Release 应用，校验 IPA 内的 ARM64 Mach-O 与 iOS 平台标记。
+3. 独立运行 iOS 原生单元测试、真实播放与 UI 交互测试，导出截图和 xcresult。
+4. 上传 `Flamingo-unsigned-ipa` 与 `Flamingo-test-results`。两个任务均通过后才能接受该轮自动回归。
 
-## 使用 GitHub Actions 构建（用户已选择）
-
-仓库为 https://github.com/xu-68/music-player ，根目录已有 `.github/workflows/ios.yml`：
-
-1. 打开仓库的 **Actions**。
-2. 选择 **iOS Native Build** → **Run workflow**。
-3. `build` 任务在 macOS 上运行 Core 单元测试，生成 Xcode 工程，归档并生成真实 iPhone ARM64 未签名 IPA，再验证 Mach-O 平台与包结构。
-4. `ui-tests` 任务在设备包成功后独立运行模拟器界面/播放测试，导出原生截图。必须分别检查两个任务结果；设备编译通过不代表界面测试已通过。
-5. 在构建页面的 Artifacts 下载 `Flamingo-unsigned-ipa`；截图保存在 `Flamingo-test-results` 的 `.xcresult` 附件中，可在 Mac 的 Xcode 打开。
-
-工作流只使用读取仓库权限，不要求上传苹果证书。**未签名 IPA 仍需按你的安装方式签名，无法直接点开安装。** 若工作流失败，应先查看日志并修复，不能把本地语法检查当作远程构建成功。
-
-仓库已由当前账号 `xu-68` 创建并完成推送。它是独立原生仓库，未上传 Android 参考工程、本地校验器依赖或任何认证信息。
-
-## 在 Mac 本地编译
-
-安装完整 Xcode 并完成首次启动，选择命令行工具。安装 XcodeGen 后，在仓库根目录运行：
+在 Mac 本地执行：
 
 ```bash
-brew install xcodegen
-bash ios/scripts/build.sh simulator
+brew install xcodegen ffmpeg
+bash ios/scripts/generate_audio_fixtures.sh
 bash ios/scripts/build.sh test
 bash ios/scripts/build.sh unsigned
 ```
 
-也可以执行 `cd ios && xcodegen generate`，再使用 Xcode 打开 `Flamingo.xcodeproj`。源代码以 `project.yml` 为工程真源，生成的 `.xcodeproj` 已加入忽略列表。
+第一次构建需要下载并编译 FFmpeg。`build_decoder.sh` 固定源码版本和 SHA-256；`ffmpeg` 命令行程序只用于生成合成测试音频，不打包进应用。XcodeGen 的 `ios/project.yml` 是工程定义的真源；先运行 `build_decoder.sh` 再生成工程，或直接使用上面的构建脚本。
 
-签名导出使用你自己在 Xcode 配好的团队、唯一 Bundle ID 和导出配置：
+签名构建支持 `TEAM_ID`、`BUNDLE_ID`、`EXPORT_OPTIONS_PLIST` 三个环境变量，然后执行 `bash ios/scripts/build.sh signed`。证书与描述文件不写入仓库。**未签名 IPA 需要签名后安装；它不是直接可安装的 App Store 包。**
 
-```bash
-export TEAM_ID="YOUR_APPLE_TEAM_ID"
-export BUNDLE_ID="your.own.flamingo"
-export EXPORT_OPTIONS_PLIST="/absolute/path/to/ExportOptions.plist"
-bash ios/scripts/build.sh signed
-```
+Windows 的 `scripts/validate.py` 仅验证语法树、工程路径、资源和 plist，不能替代 Xcode 类型检查与运行测试。
 
-导出配置由所选安装/分发方式决定，使用 Xcode 导出时生成的配置最稳妥。构建脚本不会代为创建开发者账号或证书。
+## 平台与验收边界
 
-## 自动测试与实际验收
+- iOS 使用用户通过文件选择器授权的目录，不能像 Android MediaStore 一样无授权扫描整个设备。音频会复制到应用内；移除文件夹授权保留已经导入的副本。
+- Xposed/LSPosed 状态栏插件、Android 通知图标和 AudioTrack/MediaCodec 专属参数不适用于 iOS，对应系统播放能力使用锁屏、原生音频会话与路由。
+- 源码中未发现真实 Android AppWidgetProvider；`ui/widgets` 是应用内 Compose 控件。没有据此额外加入 WidgetKit 或 App Group 依赖。
+- 逐项功能回归、静态截图检查、实机后台/蓝牙/AirPlay 和动画视频/性能验收是不同证据。尚无真机权限和性能记录时，不能宣称全部实机验收完成。
+- TTML 兼容目标是原项目声明支持的格式，不宣称完整实现所有 W3C TTML 布局区域、样式与时间容器规范。
 
-Core 的 10 项测试覆盖：LRC 时间精度/偏移/翻译、多时间戳、逐字时间、TTML 实体/翻译/相对时间/无效 XML、队列循环、随机队列保序与恢复、重复歌曲、删除当前歌曲并保留队列、随机启动完整性、资料库序列化和时间格式。
+正式启动使用用户资料库。UI 测试只有传入 `--ui-testing` 才会生成原创合成音频与绘制封面，数据目录、偏好套件独立；这些演示素材不进入 Release。
 
-UI 测试通过显式 `--ui-testing` 参数生成原创低音量测试音频和程序绘制封面，使用 `Documents/FlamingoUITests` 及单独 UserDefaults 套件；依次保存首页、资料库、全屏播放器、歌词、队列和统计截图，验证播放/暂停及歌词跳转。它不以仿造网页代替原生运行。
-
-本地静态检查：
-
-```bash
-python -m pip install --target ios/.validation-tools tree-sitter tree-sitter-swift PyYAML
-python ios/scripts/validate.py
-```
-
-这个脚本只验证 Swift 语法树、资源格式和工程路径，**不会执行 Swift 类型检查、单元测试或模拟器测试**。
-
-必须完成的设备验收：
-
-- 使用自己的 MP3、AAC/M4A、ALAC、FLAC、WAV 测试导入、播放和标签；实际格式支持取决于系统，不把所有 M4A 误标为无损。
-- 测试 iCloud 尚未下载的文件、多选导入、重复导入、应用重启、删除正在播放歌曲和歌单编辑。
-- 锁屏/切后台连续播放，蓝牙/AirPlay 切换、耳机拔出、来电中断及恢复、系统音量和定时停止。
-- 同一首歌及同一封面对照原 Flamingo/经典 Apple Music，比较截图和展开/收起/拖动/暂停/歌词视频，调整弹簧、封面尺寸和间距。
-- 在小屏 iPhone、横屏、iPad、深浅色、VoiceOver、减弱动态效果和大字体环境验证布局。
-- 使用 Instruments 测试掉帧、能耗、导入内存和大型资料库性能；当前没有测得帧率、包体或功耗数字。
-
-## 明确限制
-
-当前没有移植 Android Xposed/状态栏插件、AAR 解码器、桌面小组件、视频动态封面、交叉淡化和完整 TTML 规范。TTML 已覆盖常见时标与逐字 span，但复杂和声、逐词独立翻译、布局区域、字体样式、帧率倍数和 seq 时间容器仍需扩展验证。JSON 适合首轮本地库实现，超大型库的索引和检索需在数据量实测后评估。
-
-视觉还原是本次实现的目标，尚不能宣称“1:1”“120 FPS”或“完全等同系统 Music”。原生技术栈减少跨平台桥接，并不自动证明流畅。
-
-保留上游 GPL-3.0 许可和来源。Android 工程留作参照，不参与 iOS 构建或 IPA 打包。
+GPL-3.0。原项目的许可保留；FFmpeg 未启用 GPL/非自由组件，其 LGPL 源码与完整构建步骤可通过仓库固定版本脚本重现。

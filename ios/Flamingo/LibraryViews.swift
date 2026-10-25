@@ -286,6 +286,12 @@ struct PlaylistsView: View {
     }
 }
 
+private struct PlaylistTrackOccurrence: Identifiable {
+    var position: Int
+    var track: Track
+    var id: Int { position }
+}
+
 struct PlaylistDetailView: View {
     let id: UUID
     @Environment(LibraryStore.self) private var library
@@ -300,6 +306,16 @@ struct PlaylistDetailView: View {
         let sorted = sort == "最近添加" ? SongSort.modified.sorted(values, descending: descending) : SongSort(rawValue: sort)?.sorted(values, descending: descending) ?? (descending ? Array(values.reversed()) : values)
         return MusicSearch.ranked(sorted, query: query)
     }
+    private var occurrences: [PlaylistTrackOccurrence] {
+        let source = (playlist?.trackIDs ?? []).enumerated().compactMap { index, id in
+            library.track(id).map { PlaylistTrackOccurrence(position: index, track: $0) }
+        }
+        var positions = Dictionary(grouping: source, by: { $0.track.id })
+        return tracks.compactMap { track in
+            guard var matches = positions[track.id], !matches.isEmpty else { return nil }
+            let value = matches.removeFirst(); positions[track.id] = matches; return value
+        }
+    }
     var body: some View {
         List {
             if let playlist {
@@ -307,15 +323,12 @@ struct PlaylistDetailView: View {
                 if let description = playlist.description, !description.isEmpty { Text(description).font(.subheadline).foregroundStyle(.secondary).listRowSeparator(.hidden) }
             }
             CollectionPlayButtons(tracks: tracks).listRowSeparator(.hidden)
-            ForEach(Array(tracks.enumerated()), id: \.offset) { _, track in
-                TrackRow(track: track) { player.play(track, in: tracks) }.contextMenu { TrackActions(track: track) }
+            ForEach(Array(occurrences.enumerated()), id: \.element.id) { index, occurrence in
+                TrackRow(track: occurrence.track) { player.play(occurrence.track, in: tracks, startingAt: index) }.contextMenu { TrackActions(track: occurrence.track) }
             }.onDelete { offsets in
                 guard var value = playlist else { return }
-                var positions = IndexSet()
-                var used = Set<Int>()
-                for offset in offsets {
-                    if let position = value.trackIDs.indices.first(where: { !used.contains($0) && value.trackIDs[$0] == tracks[offset].id }) { positions.insert(position); used.insert(position) }
-                }
+                let visible = occurrences
+                let positions = IndexSet(offsets.map { visible[$0].position })
                 value.trackIDs.remove(atOffsets: positions); library.updatePlaylist(value)
             }.onMove { from, to in
                 guard var value = playlist, query.isEmpty, sort == "手动顺序", !descending else { return }
