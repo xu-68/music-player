@@ -131,7 +131,7 @@ final class CoreTests: XCTestCase {
     func testRequestedQueueIsFIFOAndSurvivesShuffleAndClear() throws {
         let ids = (0..<6).map { _ in UUID() }
         var queue = PlaybackQueue(); queue.replace(with: Array(ids.prefix(3)))
-        queue.insert(ids[3], next: true); queue.insert(ids[4], next: true)
+        queue.insert([ids[3], ids[4]], next: true)
         XCTAssertEqual(queue.nextInQueue.map(\.trackID), [ids[3], ids[4]])
         XCTAssertEqual(queue.upNext.map(\.trackID), [ids[1], ids[2]])
         queue.toggleShuffle(); queue.toggleShuffle()

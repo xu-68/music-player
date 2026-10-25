@@ -132,8 +132,11 @@ import Observation
     func toggleShuffle() { queue.toggleShuffle(); persistQueue() }
     func cycleRepeat() { queue.repeatMode = queue.repeatMode.next; persistQueue() }
     func enqueue(_ id: UUID, next: Bool) {
+        enqueue([id], next: next)
+    }
+    func enqueue(_ ids: [UUID], next: Bool) {
         let wasEmpty = queue.current == nil
-        queue.insert(id, next: next)
+        queue.insert(ids, next: next)
         if wasEmpty { loadCurrent(autoplay: false) }
         persistQueue()
     }

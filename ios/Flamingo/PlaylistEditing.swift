@@ -22,7 +22,7 @@ struct PlaylistAdditionView: View {
                 }
                 Section("添加到现有歌单") {
                     ForEach(library.playlists) { playlist in
-                        Button(playlist.name) { for id in request.trackIDs { library.add(id, to: playlist.id) }; dismiss() }
+                        Button(playlist.name) { library.add(request.trackIDs, to: playlist.id); dismiss() }
                     }
                 }
             }.navigationTitle("添加到歌单").navigationBarTitleDisplayMode(.inline)

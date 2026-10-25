@@ -224,13 +224,17 @@ public struct PlaybackQueue: Codable, Sendable {
         let retained = Set(entries.map(\.id)); originalOrder.removeAll { !retained.contains($0) }
     }
     public mutating func insert(_ trackID: UUID, next: Bool) {
-        var entry = QueueEntry(trackID: trackID); entry.requested = next
+        insert([trackID], next: next)
+    }
+    public mutating func insert(_ trackIDs: [UUID], next: Bool) {
+        let additions = trackIDs.map { id -> QueueEntry in var entry = QueueEntry(trackID: id); entry.requested = next; return entry }
+        guard !additions.isEmpty else { return }
         let offset = next && !entries.isEmpty ? index + 1 + nextInQueue.count : entries.count
         let anchor = offset > 0 ? entries[offset - 1].id : nil
-        entries.insert(entry, at: offset)
+        entries.insert(contentsOf: additions, at: offset)
         if next, let anchor, let rank = originalOrder.firstIndex(of: anchor) {
-            originalOrder.insert(entry.id, at: rank + 1)
-        } else { originalOrder.append(entry.id) }
+            originalOrder.insert(contentsOf: additions.map(\.id), at: rank + 1)
+        } else { originalOrder.append(contentsOf: additions.map(\.id)) }
     }
     public mutating func remove(_ entryID: UUID) {
         guard let i = entries.firstIndex(where: { $0.id == entryID }), i != index else { return }

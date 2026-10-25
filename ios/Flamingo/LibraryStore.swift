@@ -427,8 +427,11 @@ actor AudioImporter {
         snapshot.playlists.append(playlist); scheduleSave()
     }
     func add(_ trackID: UUID, to playlistID: UUID) {
+        add([trackID], to: playlistID)
+    }
+    func add(_ trackIDs: [UUID], to playlistID: UUID) {
         guard ready, let i = snapshot.playlists.firstIndex(where: { $0.id == playlistID }) else { return }
-        snapshot.playlists[i].trackIDs.append(trackID); scheduleSave()
+        snapshot.playlists[i].trackIDs.append(contentsOf: trackIDs); scheduleSave()
     }
     func togglePin(_ id: UUID) {
         guard let i = snapshot.playlists.firstIndex(where: { $0.id == id }) else { return }
