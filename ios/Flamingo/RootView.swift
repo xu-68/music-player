@@ -71,11 +71,14 @@ struct RootView: View {
                 }
             }.accessibilityHidden(expanded).allowsHitTesting(!expanded)
                 .scaleEffect(expanded && !reduceMotion ? 0.96 : 1, anchor: .top)
-            if expanded, player.current != nil {
-                NowPlayingView(namespace: playerNamespace, safeArea: geometry.safeAreaInsets, close: closePlayer)
-                    .ignoresSafeArea().zIndex(2)
-                    .transition(.asymmetric(insertion: .opacity, removal: .opacity))
-            }
+            ZStack {
+                if expanded, player.current != nil {
+                    NowPlayingView(namespace: playerNamespace, safeArea: geometry.safeAreaInsets, close: closePlayer)
+                        .ignoresSafeArea()
+                        .transition(.asymmetric(insertion: .opacity, removal: .opacity))
+                }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).zIndex(2)
+                .allowsHitTesting(expanded).accessibilityHidden(!expanded)
         }
         }.fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             switch result {

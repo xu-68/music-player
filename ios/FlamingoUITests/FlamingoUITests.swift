@@ -6,6 +6,7 @@ final class FlamingoUITests: XCTestCase {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "--reset-ui-testing"]
+        if app.state != .notRunning { app.terminate(); XCTAssertTrue(app.wait(for: .notRunning, timeout: 10)) }
         app.launch()
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 20))
     }
@@ -99,6 +100,8 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertFalse(app.buttons["取消定时"].exists)
         app.navigationBars["睡眠定时"].buttons["完成"].tap()
         app.buttons["close-player"].tap()
+        let returned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
+        XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 5), .completed)
         app.buttons["设置"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         capture("11-settings")
