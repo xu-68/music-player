@@ -71,6 +71,15 @@ final class AudioTests: XCTestCase {
             let duration = try await asset.load(.duration).seconds
             XCTAssertTrue(playable, ext)
             XCTAssertEqual(duration, 0.2, accuracy: 0.08, ext)
+            let pcm = try AVAudioFile(forReading: output)
+            let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: pcm.processingFormat, frameCapacity: AVAudioFrameCount(pcm.length)))
+            try pcm.read(into: buffer)
+            let samples = try XCTUnwrap(buffer.floatChannelData).pointee
+            let count = Int(buffer.frameLength)
+            XCTAssertGreaterThan(count, 0, ext)
+            let energy = UnsafeBufferPointer(start: samples, count: count).reduce(0.0) { $0 + Double($1) * Double($1) }
+            let rms = sqrt(energy / Double(max(1, count)))
+            XCTAssertTrue(rms.isFinite, ext); XCTAssertGreaterThan(rms, 0.01, ext)
         }
     }
     func testNativeFFmpegDecodeAndMetadata() async throws {

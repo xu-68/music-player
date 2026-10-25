@@ -260,7 +260,7 @@ struct PlaylistsView: View {
                 }.contextMenu {
                     Button(playlist.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") { library.togglePin(playlist.id) }
                     Button("编辑歌单", systemImage: "pencil") { editingPlaylist = playlist }
-                    Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(playlist.trackIDs, next: true) }
+                    Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(library.tracks(for: playlist).map(\.id), next: true) }
                     Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
                     Button("删除", role: .destructive) { deleted = playlist; library.deletePlaylist(playlist.id) }
                 }.moveDisabled(playlist.isPinned != true || !query.isEmpty)
@@ -325,6 +325,7 @@ struct PlaylistDetailView: View {
             CollectionPlayButtons(tracks: tracks).listRowSeparator(.hidden)
             ForEach(Array(occurrences.enumerated()), id: \.element.id) { index, occurrence in
                 TrackRow(track: occurrence.track) { player.play(occurrence.track, in: tracks, startingAt: index) }.contextMenu { TrackActions(track: occurrence.track) }
+                    .moveDisabled(!query.isEmpty || sort != "手动顺序" || descending)
             }.onDelete { offsets in
                 guard var value = playlist else { return }
                 let visible = occurrences
@@ -332,7 +333,10 @@ struct PlaylistDetailView: View {
                 value.trackIDs.remove(atOffsets: positions); library.updatePlaylist(value)
             }.onMove { from, to in
                 guard var value = playlist, query.isEmpty, sort == "手动顺序", !descending else { return }
-                value.trackIDs.move(fromOffsets: from, toOffset: to); library.updatePlaylist(value)
+                let displayed = occurrences
+                let positions = IndexSet(from.map { displayed[$0].position })
+                let destination = to < displayed.count ? displayed[to].position : value.trackIDs.count
+                value.trackIDs.move(fromOffsets: positions, toOffset: destination); library.updatePlaylist(value)
             }
         }.listStyle(.plain).navigationTitle(playlist?.name ?? "歌单")
             .searchable(text: $query, prompt: "搜索歌单中的歌曲")
@@ -344,7 +348,7 @@ struct PlaylistDetailView: View {
                     Menu {
                         if let playlist {
                             Button(playlist.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") { library.togglePin(playlist.id) }
-                            Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(playlist.trackIDs, next: true) }
+                            Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(library.tracks(for: playlist).map(\.id), next: true) }
                             Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
                         }
                     } label: { Image(systemName: "ellipsis") }
