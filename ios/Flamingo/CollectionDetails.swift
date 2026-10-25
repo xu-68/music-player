@@ -139,7 +139,7 @@ struct CollectionActions: View {
     @Environment(PlayerStore.self) private var player
     var body: some View {
         Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: tracks.map(\.id)) }
-        Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { for track in tracks.reversed() { player.enqueue(track.id, next: true) } }
+        Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { for track in tracks { player.enqueue(track.id, next: true) } }
         Button("最后播放", systemImage: "text.line.last.and.arrowtriangle.forward") { for track in tracks { player.enqueue(track.id, next: false) } }
     }
 }

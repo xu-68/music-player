@@ -152,6 +152,7 @@ public enum RepeatMode: String, Codable, CaseIterable, Sendable {
 public struct QueueEntry: Identifiable, Equatable, Codable, Sendable {
     public var id: UUID
     public var trackID: UUID
+    public var requested: Bool?
     public init(trackID: UUID) { self.id = UUID(); self.trackID = trackID }
 }
 
@@ -164,6 +165,8 @@ public struct PlaybackQueue: Codable, Sendable {
     public init() {}
     public var current: QueueEntry? { entries.indices.contains(index) ? entries[index] : nil }
     public var upcoming: [QueueEntry] { Array(entries.dropFirst(index + 1)) }
+    public var nextInQueue: [QueueEntry] { Array(upcoming.prefix { $0.requested == true }) }
+    public var upNext: [QueueEntry] { Array(upcoming.dropFirst(nextInQueue.count)) }
 
     public mutating func replace(with ids: [UUID], startingAt offset: Int = 0, shuffled: Bool = false) {
         entries = ids.map(QueueEntry.init)
@@ -179,7 +182,7 @@ public struct PlaybackQueue: Codable, Sendable {
     @discardableResult public mutating func advance(automatic: Bool = false) -> Bool {
         guard current != nil else { return false }
         if automatic && repeatMode == .one { return true }
-        if index + 1 < entries.count { index += 1; return true }
+        if index + 1 < entries.count { index += 1; entries[index].requested = false; return true }
         if repeatMode == .all { index = 0; return true }
         return false
     }
@@ -190,7 +193,10 @@ public struct PlaybackQueue: Codable, Sendable {
         return false
     }
     public mutating func select(_ entryID: UUID) {
-        if let i = entries.firstIndex(where: { $0.id == entryID }) { index = i }
+        if let i = entries.firstIndex(where: { $0.id == entryID }) {
+            index = i
+            for consumed in 0...i where entries[consumed].requested == true { entries[consumed].requested = false }
+        }
     }
     public mutating func move(from offsets: IndexSet, to destination: Int) {
         guard let currentID = current?.id else { return }
@@ -204,16 +210,23 @@ public struct PlaybackQueue: Codable, Sendable {
     }
     public mutating func moveNext(_ id: UUID) {
         guard let from = entries.firstIndex(where: { $0.id == id }), from != index else { return }
-        move(from: IndexSet(integer: from), to: index + 1)
+        guard !nextInQueue.contains(where: { $0.id == id }) else { return }
+        let destination = index + 1 + nextInQueue.count
+        entries[from].requested = true
+        move(from: IndexSet(integer: from), to: destination)
+    }
+    public mutating func clearNextInQueue() {
+        let ids = Set(nextInQueue.map(\.id))
+        entries.removeAll { ids.contains($0.id) }; originalOrder.removeAll { ids.contains($0) }
     }
     public mutating func clearUpcoming() {
         entries = Array(entries.prefix(index + 1))
         let retained = Set(entries.map(\.id)); originalOrder.removeAll { !retained.contains($0) }
     }
     public mutating func insert(_ trackID: UUID, next: Bool) {
-        let entry = QueueEntry(trackID: trackID)
-        let anchor = current?.id
-        let offset = next && !entries.isEmpty ? index + 1 : entries.count
+        var entry = QueueEntry(trackID: trackID); entry.requested = next
+        let offset = next && !entries.isEmpty ? index + 1 + nextInQueue.count : entries.count
+        let anchor = offset > 0 ? entries[offset - 1].id : nil
         entries.insert(entry, at: offset)
         if next, let anchor, let rank = originalOrder.firstIndex(of: anchor) {
             originalOrder.insert(entry.id, at: rank + 1)
@@ -238,12 +251,17 @@ public struct PlaybackQueue: Codable, Sendable {
         guard let currentID = current?.id else { return }
         shuffled.toggle()
         if shuffled {
-            let tail = entries.dropFirst(index + 1).shuffled()
-            entries = Array(entries.prefix(index + 1)) + tail
+            let requested = nextInQueue
+            let tail = upNext.shuffled()
+            entries = Array(entries.prefix(index + 1)) + requested + tail
         } else {
+            let requested = nextInQueue
+            let ids = Set(requested.map(\.id))
+            entries.removeAll { ids.contains($0.id) }
             let rank = Dictionary(uniqueKeysWithValues: originalOrder.enumerated().map { ($1, $0) })
             entries.sort { rank[$0.id, default: 0] < rank[$1.id, default: 0] }
             index = entries.firstIndex { $0.id == currentID } ?? 0
+            entries.insert(contentsOf: requested, at: min(index + 1, entries.count))
         }
     }
 }

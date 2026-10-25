@@ -141,6 +141,7 @@ import Observation
     func moveQueueEntries(from: IndexSet, to: Int) { queue.move(from: from, to: to); persistQueue() }
     func moveQueueEntryNext(_ id: UUID) { queue.moveNext(id); persistQueue() }
     func clearUpcoming() { queue.clearUpcoming(); persistQueue() }
+    func clearNextInQueue() { queue.clearNextInQueue(); persistQueue() }
     func selectQueueEntry(_ id: UUID) { flushListening(); queue.select(id); loadCurrent(autoplay: true) }
     func refreshLyrics() { lines = current.map { library.lyrics(for: $0) } ?? [] }
     func removeFromLibrary(_ id: UUID) {

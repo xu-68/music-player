@@ -260,7 +260,7 @@ struct PlaylistsView: View {
                 }.contextMenu {
                     Button(playlist.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") { library.togglePin(playlist.id) }
                     Button("编辑歌单", systemImage: "pencil") { editingPlaylist = playlist }
-                    Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { for id in playlist.trackIDs.reversed() { player.enqueue(id, next: true) } }
+                    Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { for id in playlist.trackIDs { player.enqueue(id, next: true) } }
                     Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
                     Button("删除", role: .destructive) { deleted = playlist; library.deletePlaylist(playlist.id) }
                 }.moveDisabled(playlist.isPinned != true || !query.isEmpty)
@@ -344,7 +344,7 @@ struct PlaylistDetailView: View {
                     Menu {
                         if let playlist {
                             Button(playlist.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") { library.togglePin(playlist.id) }
-                            Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { for id in playlist.trackIDs.reversed() { player.enqueue(id, next: true) } }
+                            Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { for id in playlist.trackIDs { player.enqueue(id, next: true) } }
                             Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
                         }
                     } label: { Image(systemName: "ellipsis") }

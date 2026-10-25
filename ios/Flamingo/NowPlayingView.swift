@@ -31,7 +31,7 @@ struct NowPlayingView: View {
                     if landscape {
                         HStack(spacing: 36) {
                             primaryContent.frame(maxWidth: .infinity, maxHeight: .infinity)
-                            VStack(spacing: 20) { metadata; PlaybackProgressView(); transport; volume; footer }.frame(maxWidth: 380)
+                            VStack(spacing: 20) { metadata; PlaybackProgressView(); transport; if showVolume { volume }; footer }.frame(maxWidth: 380)
                         }.padding(.horizontal, 40).padding(.bottom, 20)
                     } else {
                         VStack(spacing: 0) {
@@ -410,25 +410,36 @@ struct QueueView: View {
                     if let current = player.current {
                         queueRow(current, current: true) {}.padding(.bottom, 16).listRowBackground(Color.clear)
                     }
-                    ForEach(player.queue.upcoming) { entry in
-                        if let track = library.track(entry.trackID) {
-                            HStack {
-                                queueRow(track, current: false) { player.selectQueueEntry(entry.id) }
-                            }.contextMenu {
-                                Button("移至下一首", systemImage: "text.line.first.and.arrowtriangle.forward") { player.moveQueueEntryNext(entry.id) }
-                                Button("移除", role: .destructive) { player.removeQueueEntry(entry.id) }
-                            }.swipeActions(edge: .leading) { Button("下一首") { player.moveQueueEntryNext(entry.id) }.tint(MusicDesign.accent) }
-                                .listRowBackground(Color.clear)
+                    if !player.queue.nextInQueue.isEmpty {
+                        Section {
+                            entries(player.queue.nextInQueue, start: player.queue.index + 1)
+                        } header: {
+                            HStack { Text("接下来播放"); Spacer(); Button("清空", action: player.clearNextInQueue).textCase(nil) }
                         }
-                    }.onDelete { offsets in
-                        let ids = offsets.map { player.queue.upcoming[$0].id }
-                        for id in ids { player.removeQueueEntry(id) }
-                    }.onMove { offsets, destination in
-                        let start = player.queue.index + 1
-                        player.moveQueueEntries(from: IndexSet(offsets.map { $0 + start }), to: destination + start)
+                    }
+                    Section("随后播放") {
+                        entries(player.queue.upNext, start: player.queue.index + 1 + player.queue.nextInQueue.count)
                     }
             }.listStyle(.plain).scrollContentBackground(.hidden).environment(\.editMode, $editMode)
                 .scrollIndicators(.hidden)
+        }
+    }
+    private func entries(_ entries: [QueueEntry], start: Int) -> some View {
+        ForEach(entries) { entry in
+            if let track = library.track(entry.trackID) {
+                queueRow(track, current: false) { player.selectQueueEntry(entry.id) }
+                    .contextMenu {
+                        if entry.requested != true { Button("移至下一首", systemImage: "text.line.first.and.arrowtriangle.forward") { player.moveQueueEntryNext(entry.id) } }
+                        Button("移除", role: .destructive) { player.removeQueueEntry(entry.id) }
+                    }
+                    .swipeActions(edge: .leading) {
+                        if entry.requested != true { Button("下一首") { player.moveQueueEntryNext(entry.id) }.tint(MusicDesign.accent) }
+                    }.listRowBackground(Color.clear)
+            }
+        }.onDelete { offsets in
+            let ids = offsets.map { entries[$0].id }; for id in ids { player.removeQueueEntry(id) }
+        }.onMove { offsets, destination in
+            player.moveQueueEntries(from: IndexSet(offsets.map { $0 + start }), to: destination + start)
         }
     }
     private func queueRow(_ track: Track, current: Bool, action: @escaping () -> Void) -> some View {

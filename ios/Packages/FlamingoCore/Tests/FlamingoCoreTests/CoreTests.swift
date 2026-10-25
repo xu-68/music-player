@@ -128,6 +128,21 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(restored.current, current)
         queue.clearUpcoming(); XCTAssertTrue(queue.upcoming.isEmpty)
     }
+    func testRequestedQueueIsFIFOAndSurvivesShuffleAndClear() throws {
+        let ids = (0..<6).map { _ in UUID() }
+        var queue = PlaybackQueue(); queue.replace(with: Array(ids.prefix(3)))
+        queue.insert(ids[3], next: true); queue.insert(ids[4], next: true)
+        XCTAssertEqual(queue.nextInQueue.map(\.trackID), [ids[3], ids[4]])
+        XCTAssertEqual(queue.upNext.map(\.trackID), [ids[1], ids[2]])
+        queue.toggleShuffle(); queue.toggleShuffle()
+        XCTAssertEqual(queue.nextInQueue.map(\.trackID), [ids[3], ids[4]])
+        queue.moveNext(queue.upNext.last!.id)
+        XCTAssertEqual(queue.nextInQueue.map(\.trackID), [ids[3], ids[4], ids[2]])
+        let restored = try JSONDecoder().decode(PlaybackQueue.self, from: JSONEncoder().encode(queue))
+        XCTAssertEqual(restored.nextInQueue, queue.nextInQueue)
+        queue.clearNextInQueue()
+        XCTAssertTrue(queue.nextInQueue.isEmpty); XCTAssertEqual(queue.upNext.map(\.trackID), [ids[1]])
+    }
     func testPortableStatsBackupMergeAndDeletedMetadata() throws {
         let track = Track(title: "Song", artist: "Singer", album: "Album", filename: "a.wav")
         var session = ListeningSession(trackID: track.id, seconds: 70)
