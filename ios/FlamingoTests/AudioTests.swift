@@ -3,6 +3,22 @@ import XCTest
 @testable import Flamingo
 
 final class AudioTests: XCTestCase {
+    func testExtendedAudioFormatsDecodeToPlayablePCM() async throws {
+        let folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        for ext in ["wma", "ogg", "opus", "flac", "wv"] {
+            let input = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "tone", withExtension: ext), "Generate synthetic fixtures before testing")
+            let output = folder.appending(path: ext + ".caf")
+            let tags = try NativeDecoder.decode(input, output: output)
+            XCTAssertEqual(tags["title"], "Decoder fixture", ext)
+            let asset = AVURLAsset(url: output)
+            let playable = try await asset.load(.isPlayable)
+            let duration = try await asset.load(.duration).seconds
+            XCTAssertTrue(playable, ext)
+            XCTAssertEqual(duration, 0.2, accuracy: 0.08, ext)
+        }
+    }
     func testNativeFFmpegDecodeAndMetadata() async throws {
         let folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

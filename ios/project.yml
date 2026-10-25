@@ -70,7 +70,11 @@ targets:
   FlamingoTests:
     type: bundle.unit-test
     platform: iOS
-    sources: [FlamingoTests]
+    sources:
+      - path: FlamingoTests
+        excludes: [Fixtures]
+      - path: FlamingoTests/Fixtures
+        buildPhase: resources
     dependencies:
       - target: Flamingo
     settings:

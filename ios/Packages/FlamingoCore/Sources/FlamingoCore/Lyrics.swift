@@ -113,7 +113,7 @@ public enum LyricsParser {
         var result: [LyricLine] = []
         for line in sorted {
             if mergeTranslations, let last = result.last, abs(last.start - line.start) < 0.001,
-               !last.text.isEmpty, !line.text.isEmpty, last.text != line.text {
+               last.agent == line.agent, !last.text.isEmpty, !line.text.isEmpty, last.text != line.text {
                 result[result.count - 1].translation = line.text
             } else { result.append(line) }
         }

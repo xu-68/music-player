@@ -71,6 +71,7 @@ struct RootView: View {
             case .failure(let error): library.errorMessage = error.localizedDescription
             }
         }.sheet(isPresented: $settings) { SettingsView() }
+            .sheet(item: $library.playlistAddition) { request in PlaylistAdditionView(request: request) }
             .overlay(alignment: .top) {
                 if library.importing {
                     HStack { ProgressView(); Text(library.importProgress).font(.footnote).lineLimit(1) }

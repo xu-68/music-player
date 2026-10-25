@@ -25,6 +25,11 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
     public var sampleRate: Double?
     public var bitsPerSample: Int?
     public var bitRate: Int?
+    public var genre: String?
+    public var composer: String?
+    public var writer: String?
+    public var author: String?
+    public var year: String?
 
     public init(id: UUID = UUID(), title: String, artist: String = "未知艺人",
                 album: String = "未知专辑", albumArtist: String = "", filename: String,
@@ -45,7 +50,7 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
         ["flac", "wav", "aiff", "aif", "ape", "wv", "tta", "tak"].contains((filename as NSString).pathExtension.lowercased()) || codec?.lowercased() == "alac"
     }
     public func matches(_ query: String) -> Bool {
-        query.isEmpty || [title, artist, album].contains { $0.localizedStandardContains(query) }
+        query.isEmpty || [title, artist, album, albumArtist, genre ?? "", composer ?? "", writer ?? "", author ?? "", year ?? ""].contains { $0.localizedStandardContains(query) }
     }
 }
 
@@ -53,6 +58,10 @@ public struct Playlist: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
     public var name: String
     public var trackIDs: [UUID]
+    public var description: String?
+    public var artworkFilename: String?
+    public var isPinned: Bool?
+    public var pinOrder: Int?
     public init(id: UUID = UUID(), name: String, trackIDs: [UUID] = []) {
         self.id = id; self.name = name; self.trackIDs = trackIDs
     }

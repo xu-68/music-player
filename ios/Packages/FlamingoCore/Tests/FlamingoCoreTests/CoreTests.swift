@@ -59,6 +59,29 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(queue.previous())
         XCTAssertEqual(queue.current?.trackID, ids[2])
     }
+    func testFuzzySearchMetadataRankingAndRecentAlbumGrouping() {
+        var exact = Track(title: "Hello", artist: "A", album: "One", filename: "a.mp3")
+        exact.composer = "Example Composer"
+        let prefix = Track(title: "Hello world", filename: "b.mp3")
+        let artist = Track(title: "Different", artist: "Hello", filename: "c.mp3")
+        XCTAssertEqual(MusicSearch.ranked([artist, prefix, exact], query: "hello").map(\.id), [exact.id, prefix.id, artist.id])
+        XCTAssertEqual(MusicSearch.ranked([exact], query: "helo").first?.id, exact.id)
+        XCTAssertEqual(MusicSearch.ranked([exact], query: "Composer").first?.id, exact.id)
+        XCTAssertTrue(MusicSearch.ranked([exact], query: "no match anywhere").isEmpty)
+        let album = (0..<4).map { Track(title: "Song \($0)", album: "One", filename: "\($0).wav") }
+        let groups = RecentMusic.group(album + [prefix])
+        XCTAssertEqual(groups.count, 2); XCTAssertTrue(groups[0].isAlbum); XCTAssertEqual(groups[0].tracks.count, 4)
+        XCTAssertFalse(RecentMusic.group(Array(album.prefix(3)))[0].isAlbum)
+    }
+    func testNullAndroidBackupAndSleepModes() throws {
+        let data = Data(#"[{"uri":null,"title":null,"artists":null,"album":null,"albumArtists":null,"dayStartMs":0,"timestampMs":0,"listenedMs":1000,"countsAsPlay":true}]"#.utf8)
+        let sessions = try ListeningBackup.restore(data, into: [], tracks: [], merge: false)
+        XCTAssertEqual(sessions.count, 1); XCTAssertEqual(sessions[0].seconds, 1)
+        let now = Date(timeIntervalSince1970: 100)
+        XCTAssertEqual(SleepPlan(mode: .duration, minutes: 1, now: now).deadline, now.addingTimeInterval(60))
+        XCTAssertNil(SleepPlan(mode: .endOfTrack).deadline)
+        XCTAssertNil(SleepPlan(mode: .endOfQueue).deadline)
+    }
     func testTTMLAppleMetadataDuetsAndSecondsAreAbsolute() {
         let xml = #"<tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata" xmlns:itunes="http://music.apple.com/lyric-ttml-internal"><head><metadata><translations><text for="L1">你好</text></translations><transliterations><text for="L1">ni hao</text></transliterations></metadata></head><body><div><p begin="1s" end="4s" itunes:key="L1" ttm:agent="v1"><span begin="1s" end="2s">Hello</span></p><p begin="1s" end="3s" ttm:agent="v2">World</p><p begin="7s" end="8s">End</p></div></body></tt>"#
         let lines = LyricsParser.parse(xml)

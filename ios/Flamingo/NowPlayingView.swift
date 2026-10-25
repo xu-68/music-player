@@ -241,11 +241,14 @@ struct LyricsView: View {
                                     } label: {
                                         VStack(alignment: right ? .trailing : .leading, spacing: 8) {
                                             if line.words.isEmpty {
-                                                Text(line.text.isEmpty ? "•••" : line.text)
+                                                if line.text.isEmpty {
+                                                    LyricCountdown(line: line, time: player.elapsed, active: active)
+                                                } else { Text(line.text)
                                                     .font(.system(size: 30, weight: PlayerPreferences.lyricWeight)).tracking(-0.5)
                                                     .foregroundStyle(.white.opacity(active ? 1 : 0.26))
                                                     .multilineTextAlignment(right ? .trailing : .leading)
                                                     .fixedSize(horizontal: false, vertical: true)
+                                                }
                                             } else {
                                                 KaraokeLine(line: line, time: player.elapsed, active: active, reduceMotion: reduceMotion, balanced: balance, weight: weight)
                                             }
@@ -277,6 +280,21 @@ struct LyricsView: View {
     }
     private func scroll(_ reader: ScrollViewProxy, to id: Int) {
         withAnimation(reduceMotion ? nil : MusicDesign.lyricSpring) { reader.scrollTo(id, anchor: UnitPoint(x: 0.5, y: 0.32)) }
+    }
+}
+
+private struct LyricCountdown: View {
+    var line: LyricLine
+    var time: Double
+    var active: Bool
+    var body: some View {
+        let progress = max(0, min(1, (time - line.start) / max(0.1, (line.end ?? line.start + 3) - line.start)))
+        HStack(spacing: 8) {
+            ForEach(0..<3) { i in
+                Circle().fill(.white.opacity(active && progress >= Double(i) / 3 ? 1 : 0.25))
+                    .frame(width: 9, height: 9).scaleEffect(active && progress >= Double(i) / 3 ? 1.12 : 0.8)
+            }
+        }.frame(height: 30).animation(.easeInOut(duration: 0.18), value: progress).accessibilityLabel("间奏")
     }
 }
 

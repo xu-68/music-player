@@ -106,6 +106,8 @@ actor AudioImporter {
                 track.sampleRate = fallbackTags["sampleRate"].flatMap(Double.init)
                 track.bitsPerSample = fallbackTags["bitsPerSample"].flatMap(Int.init)
                 track.bitRate = fallbackTags["bitRate"].flatMap(Int.init)
+                track.genre = fallbackTags["genre"]; track.composer = fallbackTags["composer"]
+                track.writer = fallbackTags["writer"]; track.author = fallbackTags["author"]; track.year = fallbackTags["date"]
                 if let decodedName {
                     let cover = LibraryPaths.decoded.appending(path: decodedName).appendingPathExtension("cover")
                     if FileManager.default.fileExists(atPath: cover.path) {
@@ -141,6 +143,11 @@ actor AudioImporter {
             let allMetadata = try await asset.load(.metadata)
             for item in allMetadata {
                 let key = item.identifier?.rawValue ?? String(describing: item.key)
+                let common = item.commonKey
+                if common == .commonKeyType { track.genre = try? await item.load(.stringValue) }
+                if common == .commonKeyAuthor { track.author = try? await item.load(.stringValue) }
+                if common == .commonKeyCreator { track.composer = try? await item.load(.stringValue) }
+                if common == .commonKeyCreationDate { track.year = try? await item.load(.stringValue) }
                 if key.contains("aART") { track.albumArtist = (try? await item.load(.stringValue)) ?? "" }
                 if key.localizedCaseInsensitiveContains("lyrics") || key.contains("©lyr") || key.contains("USLT") {
                     track.embeddedLyrics = try? await item.load(.stringValue)
@@ -166,6 +173,7 @@ actor AudioImporter {
     private(set) var importProgress = ""
     var errorMessage: String?
     var importMessage: String?
+    var playlistAddition: PlaylistAddition?
     @ObservationIgnored private let disk = LibraryDisk()
     @ObservationIgnored private let importer = AudioImporter()
     @ObservationIgnored private var saveTask: Task<Void, Never>?
@@ -384,9 +392,21 @@ actor AudioImporter {
         snapshot.playlists.append(playlist); scheduleSave()
     }
     func add(_ trackID: UUID, to playlistID: UUID) {
-        guard ready, let i = snapshot.playlists.firstIndex(where: { $0.id == playlistID }),
-              !snapshot.playlists[i].trackIDs.contains(trackID) else { return }
+        guard ready, let i = snapshot.playlists.firstIndex(where: { $0.id == playlistID }) else { return }
         snapshot.playlists[i].trackIDs.append(trackID); scheduleSave()
+    }
+    func togglePin(_ id: UUID) {
+        guard let i = snapshot.playlists.firstIndex(where: { $0.id == id }) else { return }
+        let pin = snapshot.playlists[i].isPinned != true
+        let next = (snapshot.playlists.compactMap(\.pinOrder).max() ?? -1) + 1
+        snapshot.playlists[i].isPinned = pin; snapshot.playlists[i].pinOrder = pin ? next : nil
+        scheduleSave()
+    }
+    func reorderPins(_ ids: [UUID]) {
+        for (rank, id) in ids.enumerated() {
+            if let i = snapshot.playlists.firstIndex(where: { $0.id == id }), snapshot.playlists[i].isPinned == true { snapshot.playlists[i].pinOrder = rank }
+        }
+        scheduleSave()
     }
     func deleteTrack(_ id: UUID) {
         guard ready, let track = track(id) else { return }

@@ -43,13 +43,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install project generator
-        run: brew install xcodegen
+        run: brew install xcodegen ffmpeg
       - uses: actions/cache@v4
         with:
           path: ios/Build/Decoder/FlamingoDecoder.xcframework
           key: decoder-7.1.5-${{ runner.arch }}-${{ hashFiles('ios/scripts/build_decoder.sh', 'ios/Decoder/**') }}
       - name: Simulator UI and playback tests
-        run: bash ios/scripts/build.sh ui-test
+        run: |
+          bash ios/scripts/generate_audio_fixtures.sh
+          bash ios/scripts/build.sh ui-test
       - name: Export native screenshots
         if: always()
         shell: bash

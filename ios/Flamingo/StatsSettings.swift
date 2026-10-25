@@ -56,7 +56,17 @@ struct StatsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                Picker("统计时间", selection: $periodName) { ForEach(ListeningPeriod.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }.pickerStyle(.segmented)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(ListeningPeriod.allCases, id: \.self) { value in
+                            Button { periodName = value.rawValue } label: {
+                                Text(value.rawValue).font(.subheadline.weight(.semibold)).padding(.horizontal, 18).padding(.vertical, 10)
+                                    .foregroundStyle(value == period ? MusicDesign.accent : Color.secondary)
+                                    .overlay(Capsule().strokeBorder(value == period ? MusicDesign.accent : Color.secondary.opacity(0.12), lineWidth: 1.5))
+                            }.buttonStyle(.plain).accessibilityAddTraits(value == period ? .isSelected : [])
+                        }
+                    }
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text("\(Int(total / 60))").font(.system(size: 64, weight: .bold, design: .rounded)).monospacedDigit()
@@ -67,9 +77,9 @@ struct StatsView: View {
                 if sessions.isEmpty {
                     MusicEmptyState(title: "每一次聆听，都算数", message: "与原版一致，歌曲播放进度达到一半后计入统计。", symbol: "chart.xyaxis.line").frame(minHeight: 260)
                 } else {
-                    rankSection("常听歌曲", values: ranks(0))
                     rankSection("艺人", values: ranks(1))
                     rankSection("常听专辑", values: ranks(2))
+                    rankSection("常听歌曲", values: ranks(0))
                 }
             }.padding(20)
         }.navigationTitle("统计").toolbar { ToolbarItem(placement: .topBarTrailing) { Button("设置", systemImage: "gearshape", action: settingsAction) } }
@@ -79,7 +89,19 @@ struct StatsView: View {
             NavigationLink { ListeningRankList(title: title, values: values) } label: {
                 HStack { Text(title).font(.title2.bold()).foregroundStyle(Color.primary); Spacer(); Image(systemName: "chevron.right").font(.subheadline).foregroundStyle(.secondary) }
             }.buttonStyle(.plain)
-            ForEach(Array(values.prefix(3).enumerated()), id: \.element.id) { index, rank in ListeningRankRow(rank: rank, position: index + 1) }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(Array(values.prefix(10))) { rank in
+                        NavigationLink { SongsView(title: rank.name, ids: rank.tracks.map(\.id)) } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ArtworkView(track: rank.tracks.first).frame(width: 136, height: 136)
+                                Text(rank.name).font(.body).foregroundStyle(Color.primary).lineLimit(1)
+                                Text("\(Int(rank.seconds / 60)) 分钟").font(.subheadline).foregroundStyle(.secondary)
+                            }.frame(width: 136, alignment: .leading)
+                        }.buttonStyle(PressStyle()).disabled(rank.tracks.isEmpty)
+                    }
+                }
+            }
         }
     }
 }
@@ -139,7 +161,6 @@ struct SettingsView: View {
     @State private var exportURL: URL?
     @State private var clearing = ""
     @State private var confirmClear = false
-    @State private var cacheSize = ""
     var body: some View {
         NavigationStack {
             Form {

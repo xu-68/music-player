@@ -143,12 +143,7 @@ struct TrackActions: View {
         Button(track.isFavorite ? "取消收藏" : "收藏", systemImage: track.isFavorite ? "star.slash" : "star") { library.toggleFavorite(track.id) }
         Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(track.id, next: true) }
         Button("最后播放", systemImage: "text.line.last.and.arrowtriangle.forward") { player.enqueue(track.id, next: false) }
-        Menu("添加到歌单", systemImage: "text.badge.plus") {
-            if library.playlists.isEmpty { Text("请先在资料库创建歌单") }
-            ForEach(library.playlists) { playlist in
-                Button(playlist.name) { library.add(track.id, to: playlist.id) }
-            }
-        }
+        Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: [track.id]) }
         ShareLink(item: LibraryPaths.audio.appending(path: track.filename)) { Label("分享音频文件", systemImage: "square.and.arrow.up") }
     }
 }

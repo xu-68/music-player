@@ -11,6 +11,19 @@ public struct ListeningEvent: Codable, Sendable {
     public var timestampMs: Int64
     public var listenedMs: Int64
     public var countsAsPlay: Bool
+    enum CodingKeys: String, CodingKey { case uri, title, artists, album, albumArtists, dayStartMs, timestampMs, listenedMs, countsAsPlay }
+    public init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        uri = try box.decodeIfPresent(String.self, forKey: .uri)
+        title = try box.decodeIfPresent(String.self, forKey: .title) ?? "未知歌曲"
+        artists = try box.decodeIfPresent(String.self, forKey: .artists) ?? "未知艺人"
+        album = try box.decodeIfPresent(String.self, forKey: .album) ?? "未知专辑"
+        albumArtists = try box.decodeIfPresent(String.self, forKey: .albumArtists) ?? ""
+        dayStartMs = try box.decodeIfPresent(Int64.self, forKey: .dayStartMs) ?? 0
+        timestampMs = try box.decodeIfPresent(Int64.self, forKey: .timestampMs) ?? 0
+        listenedMs = try box.decodeIfPresent(Int64.self, forKey: .listenedMs) ?? 0
+        countsAsPlay = try box.decodeIfPresent(Bool.self, forKey: .countsAsPlay) ?? false
+    }
     public init(session: ListeningSession, track: Track?) {
         uri = session.originalURI ?? "flamingo://track/\(session.trackID.uuidString)"
         title = session.title ?? track?.title ?? "已移除的歌曲"
