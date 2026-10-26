@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 final class FlamingoUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -145,6 +146,26 @@ final class FlamingoUITests: XCTestCase {
             XCTAssertEqual(XCTWaiter.wait(for: [usable], timeout: 5), .completed)
         }
         Thread.sleep(forTimeInterval: 0.7)
+        if verifyingDock {
+            // A hittable accessibility node can remain even when a navigation
+            // transition incorrectly paints over the dock. Inspect actual pixels.
+            let dockImage = app.buttons["mini-player"].screenshot().image
+            if let image = dockImage.cgImage {
+                var pixels = [UInt8](repeating: 0, count: 32 * 16 * 4)
+                let rendered = pixels.withUnsafeMutableBytes { bytes -> Bool in
+                    guard let context = CGContext(data: bytes.baseAddress, width: 32, height: 16,
+                        bitsPerComponent: 8, bytesPerRow: 32 * 4, space: CGColorSpaceCreateDeviceRGB(),
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+                    context.draw(image, in: CGRect(x: 0, y: 0, width: 32, height: 16))
+                    return true
+                }
+                XCTAssertTrue(rendered)
+                let visible = stride(from: 0, to: pixels.count, by: 4).filter {
+                    max(pixels[$0], max(pixels[$0 + 1], pixels[$0 + 2])) > 12
+                }.count
+                XCTAssertGreaterThan(visible, 32 * 16 / 10, "Mini player must render visibly on \(name)")
+            } else { XCTFail("Could not inspect the mini-player screenshot") }
+        }
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = name; screenshot.lifetime = .keepAlways; add(screenshot)
     }

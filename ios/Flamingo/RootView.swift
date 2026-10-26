@@ -68,7 +68,7 @@ struct RootView: View {
                 }.background {
                     if barBlur { Rectangle().fill(.bar) }
                     else { Color(uiColor: .systemBackground) }
-                }
+                }.compositingGroup().zIndex(1)
             }.accessibilityHidden(expanded).allowsHitTesting(!expanded)
                 .scaleEffect(expanded && !reduceMotion ? 0.96 : 1, anchor: .top)
             ZStack {
