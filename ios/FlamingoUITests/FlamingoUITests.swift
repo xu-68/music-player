@@ -31,9 +31,14 @@ final class FlamingoUITests: XCTestCase {
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["tab-home"].tap()
         app.buttons["设置"].tap()
-        XCTAssertTrue(app.switches["auto-scan-music"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["scan-music"].exists)
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
+        let automatic = app.switches["auto-scan-music"]
+        let scan = app.buttons["scan-music"]
+        for _ in 0..<8 where !scan.isHittable { app.swipeUp() }
+        XCTAssertTrue(automatic.exists)
+        XCTAssertTrue(scan.isHittable)
         XCTAssertFalse(app.buttons["添加音乐文件夹"].exists)
+        capture("13-music-settings")
     }
     func testClassicScreensAndPlayer() {
         capture("01-home", verifyingDock: true)
