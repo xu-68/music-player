@@ -3,6 +3,26 @@ import XCTest
 @testable import Flamingo
 
 final class AudioTests: XCTestCase {
+    func testMetadataProbeReadsTagsWithoutCreatingDecodedAudio() throws {
+        let folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let cover = folder.appending(path: "artwork.cover")
+        for ext in ["flac", "wma", "ogg", "opus", "wv"] {
+            let input = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "tone", withExtension: ext))
+            let tags = try NativeDecoder.probe(input, cover: cover)
+            XCTAssertEqual(tags["title"], "Decoder fixture", ext)
+            XCTAssertEqual(tags["album"], "Decoder Album", ext)
+            XCTAssertEqual(tags["composer"], "Test Composer", ext)
+            XCTAssertEqual(tags["album_artist"] ?? tags["albumartist"], "Flamingo Ensemble", ext)
+            XCTAssertTrue(try FileManager.default.contentsOfDirectory(atPath: folder.path).isEmpty)
+        }
+        let broken = folder.appending(path: "broken.flac")
+        try Data("invalid".utf8).write(to: broken)
+        XCTAssertThrowsError(try NativeDecoder.probe(broken, cover: cover))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cover.path))
+    }
+
     func testImporterUsesFFmpegForWMAAndRetainsTags() async throws {
         let input = try XCTUnwrap(Bundle(for: AudioTests.self).url(forResource: "tone", withExtension: "wma"))
         let importer = AudioImporter()
