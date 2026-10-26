@@ -11,10 +11,10 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 20))
     }
     func testClassicScreensAndPlayer() {
-        capture("01-home")
+        capture("01-home", verifyingDock: true)
         app.buttons["tab-library"].tap()
         XCTAssertTrue(app.navigationBars["资料库"].waitForExistence(timeout: 5))
-        capture("02-library")
+        capture("02-library", verifyingDock: true)
         app.buttons["mini-player"].tap()
         XCTAssertTrue(app.buttons["player-play-pause"].waitForExistence(timeout: 5))
         capture("03-now-playing")
@@ -28,7 +28,7 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 5))
         app.buttons["tab-stats"].tap()
         XCTAssertTrue(app.navigationBars["统计"].waitForExistence(timeout: 5))
-        capture("06-stats")
+        capture("06-stats", verifyingDock: true)
     }
     func testPlaybackAndSeekFromLyrics() {
         app.buttons["mini-player"].tap()
@@ -77,7 +77,7 @@ final class FlamingoUITests: XCTestCase {
         app.navigationBars["添加歌曲"].buttons["完成"].tap()
         app.navigationBars["新建歌单"].buttons["完成"].tap()
         XCTAssertTrue(app.staticTexts["Test playlist"].waitForExistence(timeout: 5))
-        capture("08-playlists")
+        capture("08-playlists", verifyingDock: true)
         app.terminate()
         app.launchArguments = ["--ui-testing"]
         app.launch()
@@ -85,7 +85,7 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Test playlist"].waitForExistence(timeout: 5))
         app.staticTexts["Test playlist"].tap()
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", "海风经过，Flamingo Studio")).count, 2)
-        capture("09-playlist-detail")
+        capture("09-playlist-detail", verifyingDock: true)
     }
     func testSleepTimerModesAndSettings() {
         app.buttons["mini-player"].tap()
@@ -134,12 +134,13 @@ final class FlamingoUITests: XCTestCase {
         app.buttons["前往专辑"].tap()
         XCTAssertTrue(app.navigationBars["沿岸"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["mini-player"].exists)
-        capture("12-album-detail")
+        capture("12-album-detail", verifyingDock: true)
     }
-    private func capture(_ name: String) {
+    private func capture(_ name: String, verifyingDock: Bool = false) {
         // Existence checks can pass during the native navigation push. Capture
-        // after its transition settles, and verify that the dock remains usable.
-        if !app.buttons["player-play-pause"].exists && app.buttons["mini-player"].exists {
+        // after its transition settles. Only root/navigation pages expose the dock;
+        // player overlays and presented sheets intentionally cover it.
+        if verifyingDock {
             let usable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
             XCTAssertEqual(XCTWaiter.wait(for: [usable], timeout: 5), .completed)
         }
