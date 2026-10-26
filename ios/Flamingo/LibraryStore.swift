@@ -12,9 +12,20 @@ enum LibraryPaths {
         ? root.appending(path: "Music", directoryHint: .isDirectory)
         : URL.documentsDirectory.appending(path: "Music", directoryHint: .isDirectory)
     static func musicFile(_ name: String) throws -> URL {
-        let base = audio.resolvingSymlinksInPath().standardizedFileURL.path + "/"
-        let file = audio.appending(path: name).resolvingSymlinksInPath().standardizedFileURL
-        guard file.path.hasPrefix(base) else { throw CocoaError(.fileReadNoPermission) }
+        let parts = name.split(separator: "/", omittingEmptySubsequences: false)
+        guard !parts.isEmpty, parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+            throw CocoaError(.fileReadNoPermission)
+        }
+        var file = audio.resolvingSymlinksInPath().standardizedFileURL
+        for part in parts {
+            file.append(path: String(part))
+            // resolvingSymlinksInPath may leave symlinks unresolved when the leaf
+            // does not exist. Reject each link component before reaching the leaf.
+            let attributes = try? FileManager.default.attributesOfItem(atPath: file.path)
+            if attributes?[.type] as? FileAttributeType == .typeSymbolicLink {
+                throw CocoaError(.fileReadNoPermission)
+            }
+        }
         return file
     }
     static let artwork = root.appending(path: "Artwork", directoryHint: .isDirectory)

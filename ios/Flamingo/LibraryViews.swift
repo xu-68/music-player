@@ -184,6 +184,7 @@ struct SongsView: View {
     @Environment(PlayerStore.self) private var player
     @State private var query = ""
     @State private var pendingDeletion: Track?
+    @State private var showingDeletion = false
     @AppStorage("songSort") private var songSort = "标题"
     @AppStorage("sortDescending") private var descending = false
     private var tracks: [Track] {
@@ -195,16 +196,18 @@ struct SongsView: View {
             if !tracks.isEmpty { CollectionPlayButtons(tracks: tracks).listRowSeparator(.hidden).listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 12, trailing: 20)) }
             ForEach(tracks) { track in
                 TrackRow(track: track) { player.play(track, in: tracks) }
+                    .accessibilityIdentifier("song-\(track.filename)")
                     .contextMenu { TrackActions(track: track) }
-                    .swipeActions(edge: .trailing) { Button("删除", role: .destructive) { pendingDeletion = track } }
+                    .swipeActions(edge: .trailing) { Button("删除", role: .destructive) { pendingDeletion = track; showingDeletion = true }.accessibilityIdentifier("delete-song") }
                     .swipeActions(edge: .leading) { Button { library.toggleFavorite(track.id) } label: { Label("收藏", systemImage: track.isFavorite ? "star.slash" : "star") }.tint(MusicDesign.accent) }
             }
         }.listStyle(.plain).navigationTitle(title).searchable(text: $query, prompt: "歌曲、艺人或专辑")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { SongSortMenu(sort: $songSort, descending: $descending) } }
             .overlay { if tracks.isEmpty { MusicEmptyState(title: query.isEmpty ? "还没有歌曲" : "没有找到结果", message: query.isEmpty ? "这里会显示你导入的音乐。" : "试试其他歌曲、艺人或专辑名称。", symbol: query.isEmpty ? "music.note" : "magnifyingglass") } }
-            .confirmationDialog("从资料库删除这首歌曲？", isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }), titleVisibility: .visible) {
-                Button("删除歌曲及音乐文件", role: .destructive) { if let track = pendingDeletion { player.removeFromLibrary(track.id) }; pendingDeletion = nil }
-            } message: { Text("将同时删除 Music 文件夹中的音乐源文件，并从歌单中移除。此操作无法撤销。") }
+            .confirmationDialog("删除这首歌曲及音乐源文件？", isPresented: $showingDeletion,
+                                titleVisibility: .visible, presenting: pendingDeletion) { track in
+                Button("删除歌曲及音乐文件", role: .destructive) { player.removeFromLibrary(track.id); pendingDeletion = nil }
+            } message: { _ in Text("将同时删除 Music 文件夹中的音乐源文件，并从歌单中移除。此操作无法撤销。") }
     }
 }
 

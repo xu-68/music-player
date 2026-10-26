@@ -14,19 +14,20 @@ final class FlamingoUITests: XCTestCase {
     func testManagedMusicScanAndSourceDeletion() {
         app.buttons["tab-library"].tap()
         app.buttons["library-songs"].tap()
-        let song = app.staticTexts["海风经过"].firstMatch
+        let song = app.cells.containing(.any, identifier: "song-demo-0.wav").firstMatch
         XCTAssertTrue(song.waitForExistence(timeout: 5))
         song.swipeLeft()
-        app.buttons["删除"].firstMatch.tap()
+        let delete = app.buttons["delete-song"].firstMatch
+        XCTAssertTrue(delete.waitForExistence(timeout: 5)); delete.tap()
         let confirm = app.buttons["删除歌曲及音乐文件"]
         XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
-        XCTAssertFalse(app.staticTexts["海风经过"].firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["song-demo-0.wav"].exists)
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["扫描媒体库"].tap()
         XCTAssertTrue(app.alerts["扫描完成"].waitForExistence(timeout: 20))
         app.alerts.buttons["好"].tap()
         app.buttons["library-songs"].tap()
-        XCTAssertFalse(app.staticTexts["海风经过"].firstMatch.exists)
+        XCTAssertFalse(app.descendants(matching: .any)["song-demo-0.wav"].exists)
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["tab-home"].tap()
         app.buttons["设置"].tap()
