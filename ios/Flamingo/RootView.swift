@@ -105,7 +105,18 @@ struct RootView: View {
             .onChange(of: player.current?.id) { _, id in if id == nil { closePlayer() } }
             .onChange(of: library.navigationTarget) { _, target in
                 guard let target else { return }
-                closePlayer(); tab = .library; libraryPath = [target]; library.navigationTarget = nil
+                library.navigationTarget = nil
+                if expanded {
+                    // Finish the shared-artwork transition before UIKit starts
+                    // a tab/navigation transition, so neither snapshots the dock
+                    // while it is scaled or hidden behind the player.
+                    withAnimation(reduceMotion ? .easeOut(duration: 0.15) : MusicDesign.spring,
+                                  completionCriteria: .logicallyComplete) {
+                        expanded = false
+                    } completion: {
+                        tab = .library; libraryPath = [target]
+                    }
+                } else { tab = .library; libraryPath = [target] }
             }
     }
 }
