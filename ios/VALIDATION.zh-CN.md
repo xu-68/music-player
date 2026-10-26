@@ -1,67 +1,60 @@
 # 验证记录
 
-## 当前状态：2026-10-26 续作
+日期：2026-10-26（Asia/Shanghai）。公开仓库：https://github.com/xu-68/music-player 。
 
-主要功能代码已实现，尚未完成最新版本的完整回归和真机验收。以下最新状态优先于后面的首版历史记录。
+## 当前验收版本
 
-### 上轮实际结果
+应用及测试代码提交：`3aba03c3067b215f2a474c165e5fb5b76fbc1ea1`。
 
-- 提交 `d2524f19364669c7ecc8a5d90c75b2ef30ef502a`，北京时间 04:58 提交，05:07 完成。
-- 构建：https://github.com/xu-68/music-player/actions/runs/40233228825 。
-- Core 测试、ARM64 Release 归档、IPA 校验及上传通过。
-- 原生播放测试 4/4 通过；音频测试 5 项中 1 项出现 4 个标签断言失败；UI 测试 6 项中 3 项失败。
-- 音频失败涉及 FLAC 专辑、专辑艺人、作曲及日期；UI 失败涉及截图辅助函数错误要求被全屏播放器遮挡的迷你播放器可点击，以及睡眠剩余时间读取字段错误。
-- 下载的睡眠失败现场无障碍树显示 `sleep-remaining` 的 label 为 `34:57`、`34:56`，说明延长操作已经生效。
+完整构建：https://github.com/xu-68/music-player/actions/runs/40270065988 。
 
-### 本轮修复及阻塞
+macOS-15 / Xcode 16.4。ARM64 Release 归档与原生模拟器回归均通过；共 34 项测试，0 失败。本次包含播放器收起后再进入专辑的导航修复，以及按屏幕像素比例检查底栏的 UI 回归修正。验收记录及截图提交不改变已验证的应用、解码器或测试代码。
 
-- 修复提交 `b1c50d5c0cd8cf87a1cf312001b6aec523593f56`：为系统可播放文件新增 FFmpeg 标签/封面探测，不生成 PCM 音频；修正上述 UI 断言。
-- 后续补充探测回归：FLAC/WMA/OGG/Opus/WavPack 标签、无转码副产物、损坏文件失败；FLAC 导入继续断言使用原文件播放。
-- Windows 本地检查通过：25 个 Swift 文件语法树、工程配置、资源、plist，以及 `git diff --check`。本地没有 Swift/Xcode 编译器；此结果不等于类型检查或运行通过。
-- 新构建 https://github.com/xu-68/music-player/actions/runs/40265462161 **没有启动 runner**。GitHub 明确提示账户付款失败或消费上限不足，UI 任务跳过，没有新 IPA。
-- 需在 GitHub Settings → Billing & plans 恢复 Actions 额度，或使用可用 Mac。恢复后对最新 main 手动执行 iOS Native Build；不要只重跑较早提交来代替最终版本验收。
-
-### 恢复后的完成顺序
-
-1. 执行最新 main 的 Core、音频/播放、UI 测试与 ARM64 归档，修复实际出现的失败，直到两项任务全部通过。
-2. 下载并校验该提交的 IPA，检查新截图，再更新本文件中的实际结果、产物链接和 SHA-256。
-3. 签名后进行真机后台、锁屏、蓝牙、AirPlay、文件导入，以及 iPad、大字号、动画和性能验收。
-
-根目录的 `Flamingo-iOS-unsigned.ipa` 仍是首版旧包，不能作为本轮修复版本交付。源码 ZIP 可由 `scripts/package_source.py` 更新，但不代表已通过 Xcode 构建。
-
-## 首版历史记录（不代表当前版本通过）
-
-日期：2026-10-26（Asia/Shanghai）。仓库：https://github.com/xu-68/music-player 。
-
-代码提交：`9531386904bfeac8b5218da3fcb076e16f56fcf8`。构建：https://github.com/xu-68/music-player/actions/runs/40224260658 。macOS-15 / Xcode 16.4。
-
-| 检查 | 结果 |
+| 检查 | 实际结果 |
 | --- | --- |
-| 14 个 Swift 文件的 Tree-sitter 语法解析 | 通过；不等于 Swift 类型检查 |
-| Swift 源码行尾空白检查 | 通过 |
-| XcodeGen 源码/Package 路径、YAML 格式 | 通过；已在 macOS 运行 XcodeGen 并成功生成工程 |
-| Info.plist 与工程配置一致性 | 通过 |
-| 隐私清单、资产 JSON、PNG 签名 | 通过 |
-| 内置许可与上游 LICENSE 一致性 | 通过 |
-| 原生源码包排除 Android 工程和本地验证工具 | 已生成独立源码 ZIP |
-| 10 项 Swift Core 测试 | macOS 执行通过，0 失败 |
-| 2 项原生 UI/播放交互与截图测试 | 模拟器执行通过，0 失败；涵盖六个主要界面、播放/暂停、歌词跳转与恢复播放 |
-| 原生截图 | iPhone 16 Pro 模拟器导出 7 张截图，已查看首页、资料库、播放器、歌词、队列和统计；使用明确隔离的原创测试音频/封面，保存在 docs/screenshots |
-| iOS 编译 / archive / IPA | ARM64 设备 Release 归档成功，IPA 上传成功 |
-| IPA 独立检查 | 云端与下载后本地均通过 ZIP / Mach-O / ARM64 / iOS 平台 / Info.plist 校验 |
-| GitHub 仓库 / 推送 / Actions 运行 | 已创建 xu-68/music-player 私有仓库，上传独立原生源码并触发构建 |
-| 真机后台、锁屏、蓝牙、AirPlay、导入 | 未验证 |
-| 与原 Flamingo / Apple Music 的截图与视频对照 | 未验证 |
-| 帧率、包体大小、内存、能耗 | 未测量 |
+| FlamingoCore | 18/18 通过：歌词、队列、艺人分类、搜索、历史分组、统计备份及持久化 |
+| AudioTests | 6/6 通过：多格式真实 PCM 解码、FLAC 标签与歌词回退、文件夹去重/排除、视频封面导入、损坏文件、独立元数据探测 |
+| PlayerTests | 4/4 通过：本首结束、队列结束、倒计时实际停止及延长、队列与进度恢复且不自动播放 |
+| FlamingoUITests | 6/6 通过：主界面、播放/歌词跳转、重复歌曲歌单与重启恢复、睡眠设置、进度恢复、从播放器进入专辑 |
+| 底栏可见性 | 首页、资料库、统计、歌单和专辑页同时检查可点击性与截图像素，避免仅有无障碍节点但实际不绘制 |
+| 设备归档 | ARM64 iOS Release archive 成功 |
+| IPA 校验 | 云端与下载后本地均通过 ZIP、Mach-O、ARM64、iOS 平台和 Info.plist 校验 |
+| Windows 静态检查 | 25 个 Swift 文件语法解析、工程路径、资源、plist、工作流配置与行尾空白检查通过 |
+| 签名与真机 | 未签名；未执行真机验收 |
 
-设备 IPA：441,399 字节，最低 iOS 17.0，Bundle ID `org.flamingo.local.player`，**未签名**。
+原生测试和截图：https://github.com/xu-68/music-player/actions/runs/40270065988/artifacts/12628746181 。
 
-SHA-256：`e04228be514c83245fa332dcf959327904dea79ef27522380c97cd36201e90c5`。
+设备 IPA：https://github.com/xu-68/music-player/actions/runs/40270065988/artifacts/12628320603 。
 
-产物：https://github.com/xu-68/music-player/actions/runs/40224260658/artifacts/12610815631 。
+## 交付文件
 
-首轮模拟器运行证明原生应用可以编译、安装并启动；界面播放测试发现 `.isModal` 标记错误传播，使进度条被识别为警告弹窗并干扰交互。已经移除该错误标记，保留根视图的背景无障碍隐藏；修复后两项测试全部通过，耗时约 115 秒。界面测试专用背景动画关闭以避免连续动画影响自动化等待；生产环境默认仍启用背景动画。
+- `Flamingo-iOS-unsigned.ipa`：3,126,091 字节，最低 iOS 17.0，Bundle ID `org.flamingo.local.player`。
+- SHA-256：`c4fd95d5a13a5976e1ec356da8256568f96eaecbe74497033cc0cb5bc9e5d130`。
+- `Flamingo-iOS-source.zip`：原生源码、构建脚本、许可和验证记录；不包含 Android 工程、验证工具缓存或签名证书。
+- `docs/screenshots`：本轮原生测试生成的界面截图，使用隔离的原创合成音频与封面。正式 Release 不包含这些演示数据。
 
-原生测试结果与截图：https://github.com/xu-68/music-player/actions/runs/40224260658/artifacts/12610692527 。
+IPA 仍需要签名后安装。模拟器测试与包结构检查不等于签名或真机验证。
 
-设备编译与模拟器测试分为两个任务。测试失败不会被写成成功；原生交互、实际掉帧和真机音频路由仍需分别验证。未签名 IPA 必须签名后才能安装。
+## 本轮修复
+
+1. 对系统可播放但标签读取不完整的文件增加 FFmpeg 元数据/封面探测，避免为读取 FLAC 标签而把整首歌转换成 PCM。原文件继续用于播放与分享。
+2. 修正截图辅助函数：只有真正显示底栏的页面才检查迷你播放器；全屏播放器、睡眠定时及设置弹出页不要求底层按钮可点击。
+3. 睡眠定时测试读取实际显示的无障碍 label，确认延长后约为 35 分钟，而不是读取空 value。
+4. 截图复核发现导航后底栏可能不绘制；将底栏独立合成并提升绘制顺序，增加像素检查覆盖该回归。
+
+5. 从全屏播放器进入专辑时先完成收起动画，再切换导航，避免底栏被转场快照遮挡；UI 测试按实际屏幕像素比例裁取底栏并检查可见性。
+
+## 历史构建说明
+
+- `9531386`：首版曾通过 10 项 Core 和 2 项 UI 测试；该结果不用于代替本轮验证。
+- `d2524f1` / run `40233228825`：编译和归档通过，但标签有 4 个失败断言、UI 有 3 项失败。
+- `b1c50d5` / run `40265462161`：GitHub 账户额度导致 runner 未启动，无新构建结果。
+- 按用户要求将仓库公开后，macOS runner 已正常执行，额度阻塞已解除。
+- `105c050` / run `40267322004`：18 项 Core、6 项音频、4 项播放通过，UI 5/6；剩余设置页截图断言已修复。
+- `2e8efaf` / run `40268622768`：被后续底栏绘制修复取代并取消，不作为交付依据。
+
+## 尚需设备与人工验收
+
+后台长时间播放、锁屏遥控、耳机断开、蓝牙、AirPlay、真实“文件”提供商的授权与重新访问，需要签名后的 iPhone 实测。iPad、最大辅助字号、横屏、VoiceOver、帧率、内存与能耗也未完成独立验收。
+
+自动测试证明覆盖路径的行为；截图证明对应页面实际渲染。它们不能证明与原版逐像素、全部动画曲线一致，不能据此宣称实机 120 FPS 或所有硬件场景通过。

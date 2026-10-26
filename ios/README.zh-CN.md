@@ -28,6 +28,8 @@
 3. 独立运行 iOS 原生单元测试、真实播放与 UI 交互测试，导出截图和 xcresult。
 4. 上传 `Flamingo-unsigned-ipa` 与 `Flamingo-test-results`。两个任务均通过后才能接受该轮自动回归。
 
+仓库已按用户要求公开，保留 GPL-3.0 许可。Windows 用户无需本地 Mac：在仓库 Actions 中选择 **iOS Native Build → Run workflow → main**，等待 `build` 和 `ui-tests` 均通过后，从该次运行的 Artifacts 下载 `Flamingo-unsigned-ipa`。解压得到 `.ipa`；它仍需要签名才能安装。测试截图与完整结果位于同次运行的 `Flamingo-test-results`。请以验证记录中的通过提交为准，不要把仅编译成功、测试失败的产物当作验收版本。
+
 在 Mac 本地执行：
 
 ```bash
