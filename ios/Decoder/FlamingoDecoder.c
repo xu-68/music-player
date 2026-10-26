@@ -18,6 +18,55 @@ static void property(CFMutableDictionaryRef dict, const char *key, const char *v
     if (v) CFRelease(v);
 }
 
+int flamingo_probe(const char *input, const char *metadata, const char *cover,
+                   char *error, int error_capacity) {
+    AVFormatContext *format = NULL;
+    CFMutableDictionaryRef tags = NULL;
+    CFDataRef data = NULL;
+    int result = avformat_open_input(&format, input, NULL, NULL);
+    if (result < 0) goto done;
+    result = avformat_find_stream_info(format, NULL);
+    if (result < 0) goto done;
+    int stream = av_find_best_stream(format, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
+    if (stream < 0) { result = stream; goto done; }
+    tags = CFDictionaryCreateMutable(NULL, 0, &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
+    if (!tags) { result = AVERROR(ENOMEM); goto done; }
+    AVDictionaryEntry *entry = NULL;
+    while ((entry = av_dict_get(format->metadata, "", entry, AV_DICT_IGNORE_SUFFIX))) property(tags, entry->key, entry->value);
+    entry = NULL;
+    while ((entry = av_dict_get(format->streams[stream]->metadata, "", entry, AV_DICT_IGNORE_SUFFIX))) property(tags, entry->key, entry->value);
+    AVCodecParameters *parameters = format->streams[stream]->codecpar;
+    property(tags, "codec", avcodec_get_name(parameters->codec_id));
+    char number[80];
+    snprintf(number, sizeof(number), "%d", parameters->sample_rate); property(tags, "sampleRate", number);
+    snprintf(number, sizeof(number), "%d", parameters->bits_per_raw_sample); property(tags, "bitsPerSample", number);
+    snprintf(number, sizeof(number), "%lld", (long long)format->bit_rate); property(tags, "bitRate", number);
+    for (unsigned i = 0; i < format->nb_streams; i++) {
+        AVStream *s = format->streams[i];
+        if ((s->disposition & AV_DISPOSITION_ATTACHED_PIC) && s->attached_pic.size > 0) {
+            FILE *image = fopen(cover, "wb");
+            if (image) { fwrite(s->attached_pic.data, 1, s->attached_pic.size, image); fclose(image); }
+            break;
+        }
+    }
+    data = CFPropertyListCreateData(NULL, tags, kCFPropertyListXMLFormat_v1_0, 0, NULL);
+    if (!data) { result = AVERROR(EIO); goto done; }
+    FILE *plist = fopen(metadata, "wb");
+    if (!plist) { result = AVERROR(EIO); goto done; }
+    size_t count = fwrite(CFDataGetBytePtr(data), 1, CFDataGetLength(data), plist);
+    int close_status = fclose(plist);
+    result = count == (size_t)CFDataGetLength(data) && close_status == 0 ? 0 : AVERROR(EIO);
+done:
+    if (data) CFRelease(data);
+    if (tags) CFRelease(tags);
+    avformat_close_input(&format);
+    if (result < 0) {
+        unlink(metadata); unlink(cover);
+        if (error && error_capacity > 0) av_strerror(result, error, error_capacity);
+    }
+    return result;
+}
+
 static int write_frame(SwrContext *swr, AudioFileID file, AVFrame *frame,
                        int rate, int channels, SInt64 *offset) {
     int capacity = swr_get_out_samples(swr, frame ? frame->nb_samples : 0);

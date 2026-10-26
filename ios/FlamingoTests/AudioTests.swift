@@ -34,6 +34,7 @@ final class AudioTests: XCTestCase {
         XCTAssertEqual(track.albumArtist, "Flamingo Ensemble")
         XCTAssertEqual(track.composer, "Test Composer")
         XCTAssertTrue(track.year?.hasPrefix("2024") == true)
+        XCTAssertNil(track.decodedFilename, "System-playable FLAC must retain its original playback path")
         XCTAssertEqual(library.lyrics(for: track).first?.text, "Fallback lyric")
         let count = library.tracks.count
         await library.refreshFolders()

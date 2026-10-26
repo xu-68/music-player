@@ -97,7 +97,7 @@ final class FlamingoUITests: XCTestCase {
         app.buttons["延长 5 分钟"].tap()
         let remaining = app.staticTexts["sleep-remaining"]
         let extended = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            let text = (remaining.value as? String) ?? remaining.label
+            let text = remaining.label
             let minutes = text.split(whereSeparator: { !$0.isNumber }).first.flatMap { Int($0) }
             return minutes == 34 || minutes == 35
         }, object: remaining)
@@ -139,7 +139,7 @@ final class FlamingoUITests: XCTestCase {
     private func capture(_ name: String) {
         // Existence checks can pass during the native navigation push. Capture
         // after its transition settles, and verify that the dock remains usable.
-        if app.buttons["mini-player"].exists {
+        if !app.buttons["player-play-pause"].exists && app.buttons["mini-player"].exists {
             let usable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
             XCTAssertEqual(XCTWaiter.wait(for: [usable], timeout: 5), .completed)
         }

@@ -77,11 +77,17 @@ actor AudioImporter {
             let systemTracks = (try? await asset.loadTracks(withMediaType: .audio)) ?? []
             var decodedName: String?
             var fallbackTags: [String: String] = [:]
+            let probedCover = URL.temporaryDirectory.appending(path: UUID().uuidString + ".cover")
+            defer { try? FileManager.default.removeItem(at: probedCover) }
             if (!playable || systemTracks.isEmpty) && !systemOnly {
                 let name = fingerprint + ".caf"
                 fallbackTags = try NativeDecoder.decode(destination, output: LibraryPaths.decoded.appending(path: name))
                 decodedName = name
                 asset = AVURLAsset(url: LibraryPaths.decoded.appending(path: name))
+            } else {
+                // AVFoundation can play FLAC while omitting its Vorbis tags.
+                // Probe the original container without transcoding playable audio.
+                fallbackTags = (try? NativeDecoder.probe(destination, cover: probedCover)) ?? [:]
             }
             let audioTracks = try await asset.loadTracks(withMediaType: .audio)
             guard !audioTracks.isEmpty, try await asset.load(.isPlayable) else {
@@ -105,7 +111,7 @@ actor AudioImporter {
                 track.title = fallbackTags["title"] ?? track.title
                 track.artist = fallbackTags["artist"] ?? track.artist
                 track.album = fallbackTags["album"] ?? track.album
-                track.albumArtist = fallbackTags["album_artist"] ?? ""
+                track.albumArtist = fallbackTags["album_artist"] ?? fallbackTags["albumartist"] ?? ""
                 track.embeddedLyrics = fallbackTags["lyrics"] ?? fallbackTags["LYRICS"]
                 track.trackNumber = Int((fallbackTags["track"] ?? "0").split(separator: "/").first ?? "0") ?? 0
                 track.discNumber = Int((fallbackTags["disc"] ?? "0").split(separator: "/").first ?? "0") ?? 0
@@ -133,6 +139,12 @@ actor AudioImporter {
                 let code = description.mFormatID
                 track.codec = String(bytes: [UInt8((code >> 24) & 255), UInt8((code >> 16) & 255), UInt8((code >> 8) & 255), UInt8(code & 255)], encoding: .ascii)
                 track.bitRate = (try? await audio.load(.estimatedDataRate)).map { Int($0) }
+            }
+            if FileManager.default.fileExists(atPath: probedCover.path) {
+                let name = fingerprint + ".cover"
+                let target = LibraryPaths.artwork.appending(path: name)
+                try Data(contentsOf: probedCover).write(to: target, options: .atomic)
+                track.artworkFilename = name
             }
             if let item = metadata.first(where: { $0.commonKey == .commonKeyArtwork }),
                let data = try? await item.load(.dataValue), let image = UIImage(data: data) {
