@@ -152,7 +152,9 @@ final class FlamingoUITests: XCTestCase {
             // transition incorrectly paints over the dock. Inspect actual pixels.
             let frame = app.buttons["mini-player"].frame
             let fullImage = screen.image
-            let scale = CGFloat(fullImage.cgImage?.width ?? 0) / fullImage.size.width
+            // XCTest frames use display points; screenshot UIImage scale may
+            // vary, so derive pixel scale from the full-screen app frame.
+            let scale = CGFloat(fullImage.cgImage?.width ?? 0) / app.frame.width
             let region = CGRect(x: frame.minX * scale, y: frame.minY * scale,
                                 width: frame.width * scale, height: frame.height * scale)
             if let image = fullImage.cgImage?.cropping(to: region) {
