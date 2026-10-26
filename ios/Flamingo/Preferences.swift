@@ -8,7 +8,7 @@ enum PlayerPreferences {
             "showVolume": true, "showTranslation": true, "lyricWeight": "ExtraBold",
             "lyricBalance": false, "barBlur": false, "playerCorner": 30.0,
             "animatedCovers": false, "artworkBlacklist": "",
-            "artistSeparators": ",", "refreshOnLaunch": false, "excludeShort": true,
+            "artistSeparators": ",", "autoScanMusic": true, "excludeShort": false,
             "fadePlayback": true, "listeningHistory": true, "systemDecoderOnly": false,
             "sleepFade": 5.0, "songSort": "标题", "sortDescending": false
         ])

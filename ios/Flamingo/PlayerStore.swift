@@ -148,7 +148,10 @@ import Observation
     func selectQueueEntry(_ id: UUID) { flushListening(); queue.select(id); loadCurrent(autoplay: true) }
     func refreshLyrics() { lines = current.map { library.lyrics(for: $0) } ?? [] }
     func removeFromLibrary(_ id: UUID) {
-        if current?.id == id {
+        flushListening()
+        let wasCurrent = queue.current?.trackID == id
+        guard library.deleteTrack(id) else { return }
+        if wasCurrent {
             let shouldResume = wantsPlayback
             pause()
             queue.removeTrack(id)
@@ -159,8 +162,18 @@ import Observation
                 MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
             }
         } else { queue.removeTrack(id) }
-        library.deleteTrack(id)
         persistQueue()
+    }
+    func reconcileLibrary() {
+        let missing = Set(queue.entries.map(\.trackID)).filter { library.track($0) == nil }
+        let lostCurrent = queue.current.map { library.track($0.trackID) == nil } ?? false
+        if lostCurrent { pause(); player.replaceCurrentItem(with: nil) }
+        for id in missing { queue.removeTrack(id) }
+        if lostCurrent {
+            if queue.current != nil { loadCurrent(autoplay: false) }
+            else { lines = []; elapsed = 0; duration = 0; pendingSeek = nil; MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
+        }
+        if !missing.isEmpty { persistQueue() }
     }
     func flushListening() {
         listenedSeconds += unrecorded

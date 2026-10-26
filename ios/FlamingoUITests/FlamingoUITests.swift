@@ -11,6 +11,29 @@ final class FlamingoUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 20))
     }
+    func testManagedMusicScanAndSourceDeletion() {
+        app.buttons["tab-library"].tap()
+        app.buttons["library-songs"].tap()
+        let song = app.staticTexts["海风经过"].firstMatch
+        XCTAssertTrue(song.waitForExistence(timeout: 5))
+        song.swipeLeft()
+        app.buttons["删除"].firstMatch.tap()
+        let confirm = app.buttons["删除歌曲及音乐文件"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
+        XCTAssertFalse(app.staticTexts["海风经过"].firstMatch.exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["扫描媒体库"].tap()
+        XCTAssertTrue(app.alerts["扫描完成"].waitForExistence(timeout: 20))
+        app.alerts.buttons["好"].tap()
+        app.buttons["library-songs"].tap()
+        XCTAssertFalse(app.staticTexts["海风经过"].firstMatch.exists)
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["tab-home"].tap()
+        app.buttons["设置"].tap()
+        XCTAssertTrue(app.switches["auto-scan-music"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["scan-music"].exists)
+        XCTAssertFalse(app.buttons["添加音乐文件夹"].exists)
+    }
     func testClassicScreensAndPlayer() {
         capture("01-home", verifyingDock: true)
         app.buttons["tab-library"].tap()

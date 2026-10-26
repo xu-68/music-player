@@ -149,14 +149,12 @@ struct SettingsView: View {
     @AppStorage("animatedCovers") private var covers = false
     @AppStorage("artworkBlacklist") private var blacklist = ""
     @AppStorage("artistSeparators") private var artistSeparators = ","
-    @AppStorage("refreshOnLaunch") private var refresh = false
-    @AppStorage("excludeShort") private var excludeShort = true
+    @AppStorage("autoScanMusic") private var refresh = true
     @AppStorage("fadePlayback") private var fade = true
     @AppStorage("listeningHistory") private var history = true
     @AppStorage("systemDecoderOnly") private var systemOnly = false
     @AppStorage("sleepFade") private var sleepFade = 5.0
     @State private var importing = false
-    @State private var importingFolders = false
     @State private var merge = true
     @State private var exportURL: URL?
     @State private var clearing = ""
@@ -183,13 +181,12 @@ struct SettingsView: View {
                 } header: { Text("动态封面") } footer: { Text("使用本地视频；支持在播放器菜单手动导入，或扫描文件夹内的 anim/专辑名.mp4。") }
                 Section("资料库") {
                     LabeledContent("歌曲 / 专辑 / 歌单", value: "\(library.tracks.count) / \(library.albums.count) / \(library.playlists.count)")
-                    Toggle("启动时刷新文件夹", isOn: $refresh)
-                    Toggle("扫描时排除不足一分钟的音频", isOn: $excludeShort)
+                    Toggle("自动扫描媒体库", isOn: $refresh).accessibilityIdentifier("auto-scan-music")
+                    Button("扫描媒体库", systemImage: "arrow.clockwise") { Task { await library.scanMusic() } }
+                        .disabled(library.importing).accessibilityIdentifier("scan-music")
+                    Text("在“文件 → 我的 iPhone → Flamingo → Music”中移入音乐文件，支持子文件夹。开启自动扫描后，启动或返回应用时更新媒体库。删除歌曲会同时删除此处的音乐文件。")
+                        .font(.footnote).foregroundStyle(.secondary)
                     TextField("艺人拆分符号", text: $artistSeparators)
-                    Button("添加音乐文件夹", systemImage: "folder.badge.plus") { importingFolders = true; importing = true }.disabled(library.importing)
-                    Button("刷新音乐文件夹", systemImage: "arrow.clockwise") { Task { await library.refreshFolders() } }.disabled(library.importing)
-                    NavigationLink("文件夹总览与排除") { FolderOverviewView() }
-                    ForEach(library.snapshot.folders) { folder in HStack { Label(folder.name, systemImage: "folder"); Spacer(); Button("移除") { library.removeFolder(folder.id) }.foregroundStyle(.red) } }
                 }
                 Section {
                     Toggle("播放 / 暂停淡入淡出", isOn: $fade)
@@ -204,8 +201,8 @@ struct SettingsView: View {
                         do { exportURL = try library.exportStatistics() } catch { library.errorMessage = error.localizedDescription }
                     }
                     if let exportURL { ShareLink("分享统计备份", item: exportURL) }
-                    Button("导入并合并统计") { merge = true; importingFolders = false; importing = true }
-                    Button("导入并覆盖统计") { merge = false; importingFolders = false; importing = true }
+                    Button("导入并合并统计") { merge = true; importing = true }
+                    Button("导入并覆盖统计") { merge = false; importing = true }
                     Button("清空统计", role: .destructive) { clearing = "统计"; confirmClear = true }
                     Button("清空最近播放", role: .destructive) { clearing = "最近播放"; confirmClear = true }
                 } header: { Text("历史与备份") } footer: { Text("支持原版 Flamingo 统计 JSON。合并导入会按原始事件标识去重。") }
@@ -217,11 +214,10 @@ struct SettingsView: View {
                 }
             }.navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-                .fileImporter(isPresented: $importing, allowedContentTypes: importingFolders ? [.folder] : [.json], allowsMultipleSelection: true) { result in
+                .fileImporter(isPresented: $importing, allowedContentTypes: [.json], allowsMultipleSelection: true) { result in
                     switch result {
                     case .success(let urls):
-                        if importingFolders { Task { await library.addFolders(urls) } }
-                        else if let url = urls.first {
+                        if let url = urls.first {
                             do { try library.importStatistics(url, merge: merge) } catch { library.errorMessage = "统计导入失败：\(error.localizedDescription)" }
                         }
                     case .failure(let error): library.errorMessage = error.localizedDescription
@@ -234,24 +230,6 @@ struct SettingsView: View {
     }
 }
 
-private struct FolderOverviewView: View {
-    @Environment(LibraryStore.self) private var library
-    private var directories: [String] { Set(library.snapshot.tracks.compactMap(\.sourceDirectory)).sorted() }
-    var body: some View {
-        List(directories, id: \.self) { directory in
-            let tracks = library.snapshot.tracks.filter { $0.sourceDirectory == directory }
-            HStack {
-                NavigationLink { SongsView(title: URL(fileURLWithPath: directory).lastPathComponent, ids: tracks.map(\.id)) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(URL(fileURLWithPath: directory).lastPathComponent, systemImage: "folder")
-                        Text("\(tracks.count) 首歌曲").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                Toggle("包含此文件夹", isOn: Binding(get: { !library.snapshot.hiddenDirectories.contains(directory) }, set: { library.setDirectory(directory, included: $0) })).labelsHidden()
-            }
-        }.navigationTitle("文件夹总览").overlay { if directories.isEmpty { ContentUnavailableView("还没有导入文件夹", systemImage: "folder") } }
-    }
-}
 struct SleepTimerView: View {
     @Environment(PlayerStore.self) private var player
     @State private var mode = SleepMode.duration

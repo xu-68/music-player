@@ -25,9 +25,11 @@ enum AppPreferences {
             RootView().environment(library).environment(player).tint(MusicDesign.accent)
                 .defaultAppStorage(AppPreferences.defaults)
                 .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
-                .task { if AppPreferences.defaults.bool(forKey: "refreshOnLaunch") { await library.refreshFolders() } }
-                .onOpenURL { url in if url.isFileURL { Task { await library.importFiles([url]) } } }
+                .task { if AppPreferences.defaults.bool(forKey: "autoScanMusic") { await library.scanMusic(quiet: true) } }
                 .onChange(of: scenePhase) { _, phase in
+                    if phase == .active && AppPreferences.defaults.bool(forKey: "autoScanMusic") {
+                        Task { await library.scanMusic(quiet: true) }
+                    }
                     if phase != .active { player.flushListening(); player.persistQueue(); Task { await library.saveNow() } }
                 }
         }

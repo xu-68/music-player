@@ -19,6 +19,7 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
     public var lastPlayedAt: Date?
     public var originalFilename: String?
     public var modifiedAt: Date?
+    public var sourceByteCount: Int?
     public var sourceFolderID: UUID?
     public var sourceDirectory: String?
     public var videoFilename: String?

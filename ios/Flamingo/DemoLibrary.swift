@@ -39,6 +39,7 @@ import UIKit
             AppPreferences.defaults.set(snapshot.tracks.first?.id.uuidString, forKey: "lastTrack")
             AppPreferences.defaults.set("dark", forKey: "appearance")
             AppPreferences.defaults.set(false, forKey: "animatedBackground")
+            AppPreferences.defaults.set(false, forKey: "autoScanMusic")
         } catch { assertionFailure("UI fixture creation failed: \(error)") }
     }
     private static func makeArtwork(title: String, index: Int, first: UIColor, second: UIColor) -> UIImage {

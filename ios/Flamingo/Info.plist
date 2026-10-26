@@ -52,26 +52,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>CFBundleDocumentTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeName</key>
-			<string>Audio and lyrics</string>
-			<key>CFBundleTypeRole</key>
-			<string>Viewer</string>
-			<key>LSHandlerRank</key>
-			<string>Alternate</string>
-			<key>LSItemContentTypes</key>
-			<array>
-				<string>public.audio</string>
-				<string>public.mp3</string>
-				<string>public.mpeg-4-audio</string>
-				<string>org.xiph.flac</string>
-				<string>org.xiph.ogg-audio</string>
-				<string>public.plain-text</string>
-				<string>public.xml</string>
-			</array>
-		</dict>
-	</array>
 </dict>
 </plist>

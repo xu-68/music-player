@@ -14,8 +14,8 @@ struct HomeView: View {
     var body: some View {
         Group {
             if library.tracks.isEmpty {
-                MusicEmptyState(title: "音乐，就在这里", message: "从“文件”导入你喜欢的音乐。\n专辑、歌单和歌词，全部留在你的设备上。",
-                                symbol: "music.note.house", actionTitle: "导入音乐", action: importAction)
+                MusicEmptyState(title: "音乐，就在这里", message: "把音乐移入“文件 → 我的 iPhone → Flamingo → Music”，然后扫描媒体库。",
+                                symbol: "music.note.house", actionTitle: "扫描媒体库", action: importAction)
             } else {
                 GeometryReader { proxy in
                     ScrollView {
@@ -33,7 +33,7 @@ struct HomeView: View {
                 if recommendationIDs.isEmpty || recommendationIDs.contains(where: { library.track($0) == nil }) { recommendationIDs = Array(library.tracks.shuffled().prefix(5).map(\.id)) }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("导入音乐", systemImage: "plus", action: importAction).disabled(library.importing) }
+                ToolbarItem(placement: .topBarLeading) { Button("扫描媒体库", systemImage: "arrow.clockwise", action: importAction).disabled(library.importing) }
                 ToolbarItem(placement: .topBarTrailing) { Button("设置", systemImage: "person.crop.circle", action: settingsAction).font(.title2) }
             }
     }
@@ -103,12 +103,12 @@ struct LibraryView: View {
                 NavigationLink { AlbumsView() } label: { LibraryCategory(title: "专辑", symbol: "square.stack") }.accessibilityIdentifier("library-albums")
                 NavigationLink { SongsView(title: "歌曲") } label: { LibraryCategory(title: "歌曲", symbol: "music.note") }.accessibilityIdentifier("library-songs")
                 if library.tracks.isEmpty {
-                    MusicEmptyState(title: "你的资料库", message: "导入音频后，歌曲将自动按专辑和艺人整理。", actionTitle: "导入音乐", action: importAction)
+                    MusicEmptyState(title: "你的资料库", message: "把音乐移入“文件 → 我的 iPhone → Flamingo → Music”，然后扫描媒体库。", actionTitle: "扫描媒体库", action: importAction)
                         .frame(minHeight: 280)
                 }
             }.padding(.horizontal, MusicDesign.pageInset).padding(.bottom, 24)
         }.buttonStyle(.plain).navigationTitle("资料库")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("导入音乐", systemImage: "plus", action: importAction).disabled(library.importing) } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("扫描媒体库", systemImage: "arrow.clockwise", action: importAction).disabled(library.importing) } }
     }
 }
 
@@ -203,8 +203,8 @@ struct SongsView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { SongSortMenu(sort: $songSort, descending: $descending) } }
             .overlay { if tracks.isEmpty { MusicEmptyState(title: query.isEmpty ? "还没有歌曲" : "没有找到结果", message: query.isEmpty ? "这里会显示你导入的音乐。" : "试试其他歌曲、艺人或专辑名称。", symbol: query.isEmpty ? "music.note" : "magnifyingglass") } }
             .confirmationDialog("从资料库删除这首歌曲？", isPresented: Binding(get: { pendingDeletion != nil }, set: { if !$0 { pendingDeletion = nil } }), titleVisibility: .visible) {
-                Button("删除导入的音频副本", role: .destructive) { if let track = pendingDeletion { player.removeFromLibrary(track.id) }; pendingDeletion = nil }
-            } message: { Text("原始文件不受影响。该歌曲也会从歌单中移除。") }
+                Button("删除歌曲及音乐文件", role: .destructive) { if let track = pendingDeletion { player.removeFromLibrary(track.id) }; pendingDeletion = nil }
+            } message: { Text("将同时删除 Music 文件夹中的音乐源文件，并从歌单中移除。此操作无法撤销。") }
     }
 }
 

@@ -13,7 +13,6 @@ struct RootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var tab = MusicTab.home
     @State private var expanded = false
-    @State private var importing = false
     @State private var settings = false
     @State private var libraryPath: [LibraryDestination] = []
     @AppStorage("barBlur") private var barBlur = false
@@ -30,10 +29,10 @@ struct RootView: View {
             Color(uiColor: .systemBackground).ignoresSafeArea()
             VStack(spacing: 0) {
                 TabView(selection: $tab) {
-                    NavigationStack { HomeView(importAction: { importing = true }, settingsAction: { settings = true }) }
+                    NavigationStack { HomeView(importAction: { Task { await library.scanMusic() } }, settingsAction: { settings = true }) }
                         .tag(MusicTab.home).toolbar(.hidden, for: .tabBar)
                     NavigationStack(path: $libraryPath) {
-                        LibraryView(importAction: { importing = true })
+                        LibraryView(importAction: { Task { await library.scanMusic() } })
                             .navigationDestination(for: LibraryDestination.self) { destination in
                                 switch destination {
                                 case .artist(let name): ArtistDetailView(artist: name)
@@ -80,28 +79,24 @@ struct RootView: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity).zIndex(2)
                 .allowsHitTesting(expanded).accessibilityHidden(!expanded)
         }
-        }.fileImporter(isPresented: $importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-            switch result {
-            case .success(let urls): Task { await library.importFiles(urls) }
-            case .failure(let error): library.errorMessage = error.localizedDescription
-            }
         }.sheet(isPresented: $settings) { SettingsView() }
             .sheet(item: $library.playlistAddition) { request in PlaylistAdditionView(request: request) }
             .overlay(alignment: .top) {
                 if library.importing {
                     HStack { ProgressView(); Text(library.importProgress).font(.footnote).lineLimit(1) }
-                        .padding(12).background(.regularMaterial, in: Capsule()).padding().accessibilityLabel("正在导入 \(library.importProgress)")
+                        .padding(12).background(.regularMaterial, in: Capsule()).padding().accessibilityLabel("正在扫描 \(library.importProgress)")
                 }
             }
             .alert("资料库", isPresented: Binding(get: { library.errorMessage != nil }, set: { if !$0 { library.errorMessage = nil } })) {
                 Button("好") { library.errorMessage = nil }
             } message: { Text(library.errorMessage ?? "") }
-            .alert("导入完成", isPresented: Binding(get: { library.importMessage != nil }, set: { if !$0 { library.importMessage = nil } })) {
+            .alert("扫描完成", isPresented: Binding(get: { library.importMessage != nil }, set: { if !$0 { library.importMessage = nil } })) {
                 Button("好") { library.importMessage = nil }
             } message: { Text(library.importMessage ?? "") }
             .alert("播放失败", isPresented: Binding(get: { player.errorMessage != nil }, set: { if !$0 { player.errorMessage = nil } })) {
                 Button("好") { player.errorMessage = nil }
             } message: { Text(player.errorMessage ?? "") }
+            .onChange(of: library.snapshot.tracks.map(\.id)) { _, _ in player.reconcileLibrary() }
             .onChange(of: player.current?.id) { _, id in if id == nil { closePlayer() } }
             .onChange(of: library.navigationTarget) { _, target in
                 guard let target else { return }
