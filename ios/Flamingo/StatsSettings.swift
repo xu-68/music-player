@@ -138,13 +138,12 @@ struct SettingsView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
     @AppStorage("appearance") private var appearance = "system"
-    @AppStorage("animatedBackground") private var animatedBackground = false
+    @AppStorage("animatedBackground") private var animatedBackground = true
     @AppStorage("lyricBlur") private var lyricBlur = false
     @AppStorage("lyricBalance") private var lyricBalance = false
     @AppStorage("lyricWeight") private var lyricWeight = "ExtraBold"
     @AppStorage("showTranslation") private var translation = true
     @AppStorage("showVolume") private var showVolume = true
-    @AppStorage("barBlur") private var barBlur = false
     @AppStorage("playerCorner") private var corner = 30.0
     @AppStorage("animatedCovers") private var covers = false
     @AppStorage("artworkBlacklist") private var blacklist = ""
@@ -166,7 +165,6 @@ struct SettingsView: View {
                     Picker("显示模式", selection: $appearance) { Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark") }
                     Toggle("显示音量条", isOn: $showVolume)
                     Toggle("播放背景动画", isOn: $animatedBackground)
-                    Toggle("栏背景模糊", isOn: $barBlur)
                     VStack(alignment: .leading) { Text("播放器收起圆角 · \(Int(corner))"); Slider(value: $corner, in: 0...60, step: 1) }
                 }
                 Section("歌词") {

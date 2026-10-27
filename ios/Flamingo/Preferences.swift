@@ -6,7 +6,7 @@ enum PlayerPreferences {
         AppPreferences.defaults.register(defaults: [
             "appearance": "system", "animatedBackground": true, "lyricBlur": false,
             "showVolume": true, "showTranslation": true, "lyricWeight": "ExtraBold",
-            "lyricBalance": false, "barBlur": false, "playerCorner": 30.0,
+            "lyricBalance": false, "playerCorner": 30.0,
             "animatedCovers": false, "artworkBlacklist": "",
             "artistSeparators": ",", "autoScanMusic": true, "excludeShort": false,
             "fadePlayback": true, "listeningHistory": true, "systemDecoderOnly": false,

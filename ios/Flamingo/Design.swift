@@ -79,15 +79,25 @@ struct FlowingArtworkBackground: View {
         TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !active || reduceMotion || !animated || scenePhase != .active)) { context in
             let phase = reduceMotion || !animated ? 0 : elapsed / 12
             GeometryReader { proxy in
-                Canvas { context, size in
-                    let bounds = Path(CGRect(origin: .zero, size: size))
-                    context.fill(bounds, with: .color(colors[1]))
-                    let first = CGPoint(x: size.width * (0.25 + sin(phase * 0.7) * 0.3), y: size.height * (0.2 + cos(phase) * 0.12))
-                    let second = CGPoint(x: size.width * (0.75 + cos(phase * 0.8) * 0.3), y: size.height * (0.8 + sin(phase) * 0.12))
-                    context.fill(bounds, with: .radialGradient(Gradient(colors: [colors[0], colors[0].opacity(0)]), center: first, startRadius: 0, endRadius: size.height * 0.9))
-                    context.fill(bounds, with: .radialGradient(Gradient(colors: [colors[2], colors[2].opacity(0)]), center: second, startRadius: 0, endRadius: size.height * 0.85))
-                }.overlay { Color.black.opacity(0.2) }
-                    .frame(width: proxy.size.width, height: proxy.size.height).clipped()
+                // Extend the entire render surface beyond the viewport before blurring.
+                // Transparent blur edges stay outside the screen instead of forming seams.
+                ZStack {
+                    colors[1]
+                    Ellipse().fill(colors[0])
+                        .frame(width: proxy.size.width * 1.8, height: proxy.size.height * 1.1)
+                        .offset(x: -proxy.size.width * 0.3 + sin(phase * 0.7) * 90,
+                                y: -proxy.size.height * 0.3 + cos(phase) * 80)
+                    Ellipse().fill(colors[2])
+                        .frame(width: proxy.size.width * 1.7, height: proxy.size.height)
+                        .offset(x: proxy.size.width * 0.35 + cos(phase * 0.8) * 100,
+                                y: proxy.size.height * 0.3 + sin(phase) * 90)
+                    Circle().fill(colors[0].opacity(0.65))
+                        .frame(width: proxy.size.width * 1.25)
+                        .offset(x: sin(phase * 0.6) * 80, y: proxy.size.height * 0.1)
+                }.frame(width: proxy.size.width + 480, height: proxy.size.height + 480)
+                    .compositingGroup().blur(radius: 120)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .overlay { Color.black.opacity(0.2) }.clipped()
             }
             .onChange(of: context.date) { previous, now in
                 if active && animated && !reduceMotion && scenePhase == .active {

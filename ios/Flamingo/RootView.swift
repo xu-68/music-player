@@ -15,11 +15,16 @@ struct RootView: View {
     @State private var expanded = false
     @State private var settings = false
     @State private var libraryPath: [LibraryDestination] = []
-    @AppStorage("barBlur") private var barBlur = false
     @Namespace private var playerNamespace
 
     private func expandPlayer() { withAnimation(reduceMotion ? .easeOut(duration: 0.15) : MusicDesign.spring) { expanded = true } }
     private func closePlayer() { withAnimation(reduceMotion ? .easeOut(duration: 0.15) : MusicDesign.spring) { expanded = false } }
+
+    @ViewBuilder private func floatingMiniPlayer(for destination: MusicTab) -> some View {
+        if tab == destination, player.current != nil {
+            MiniPlayer(namespace: playerNamespace, expanded: expanded, open: expandPlayer)
+        }
+    }
 
     var body: some View {
         @Bindable var library = library
@@ -27,48 +32,35 @@ struct RootView: View {
         GeometryReader { geometry in
         ZStack(alignment: .bottom) {
             Color(uiColor: .systemBackground).ignoresSafeArea()
-            VStack(spacing: 0) {
-                TabView(selection: $tab) {
-                    NavigationStack { HomeView(importAction: { Task { await library.scanMusic() } }, settingsAction: { settings = true }) }
-                        .tag(MusicTab.home).toolbar(.hidden, for: .tabBar)
-                    NavigationStack(path: $libraryPath) {
-                        LibraryView(importAction: { Task { await library.scanMusic() } })
-                            .navigationDestination(for: LibraryDestination.self) { destination in
-                                switch destination {
-                                case .artist(let name): ArtistDetailView(artist: name)
-                                case .album(let key): AlbumDetailView(albumKey: key)
-                                }
+            TabView(selection: $tab) {
+                NavigationStack { HomeView(importAction: { Task { await library.scanMusic() } }, settingsAction: { settings = true }) }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { floatingMiniPlayer(for: .home) }
+                    .toolbarBackground(.visible, for: .tabBar)
+                    .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+                    .tabItem { Label(MusicTab.home.rawValue, systemImage: MusicTab.home.symbol).accessibilityIdentifier("tab-home") }
+                    .tag(MusicTab.home)
+                NavigationStack(path: $libraryPath) {
+                    LibraryView(importAction: { Task { await library.scanMusic() } })
+                        .navigationDestination(for: LibraryDestination.self) { destination in
+                            switch destination {
+                            case .artist(let name): ArtistDetailView(artist: name)
+                            case .album(let key): AlbumDetailView(albumKey: key)
                             }
-                    }
-                        .tag(MusicTab.library).toolbar(.hidden, for: .tabBar)
-                    NavigationStack { StatsView(settingsAction: { settings = true }) }
-                        .tag(MusicTab.stats).toolbar(.hidden, for: .tabBar)
-                }.toolbar(.hidden, for: .tabBar).clipped()
-                VStack(spacing: 4) {
-                    if player.current != nil {
-                        MiniPlayer(namespace: playerNamespace, expanded: expanded, open: expandPlayer)
-                            .padding(.horizontal, 8).padding(.top, 4)
-                    }
-                    HStack(spacing: 0) {
-                        ForEach(MusicTab.allCases, id: \.self) { item in
-                            Button { tab = item } label: {
-                                VStack(spacing: 4) {
-                                    Image(systemName: item.symbol).font(.system(size: 23, weight: .medium))
-                                        .overlay {
-                                            if item == .library { Image(systemName: "music.note").font(.system(size: 12, weight: .semibold)).offset(y: 2).blendMode(.destinationOut) }
-                                        }.compositingGroup().frame(height: 26)
-                                    Text(item.rawValue).font(.system(size: 10, weight: .medium))
-                                }.foregroundStyle(tab == item ? MusicDesign.accent : Color.secondary)
-                                    .frame(maxWidth: .infinity).frame(height: 49).contentShape(Rectangle())
-                            }.buttonStyle(PressStyle()).accessibilityAddTraits(tab == item ? .isSelected : [])
-                                .accessibilityIdentifier("tab-\(item)")
                         }
-                    }
-                }.background {
-                    if barBlur { Rectangle().fill(.bar) }
-                    else { Color(uiColor: .systemBackground) }
-                }.compositingGroup().zIndex(1)
-            }.accessibilityHidden(expanded).allowsHitTesting(!expanded)
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) { floatingMiniPlayer(for: .library) }
+                .toolbarBackground(.visible, for: .tabBar)
+                .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+                .tabItem { Label(MusicTab.library.rawValue, systemImage: MusicTab.library.symbol).accessibilityIdentifier("tab-library") }
+                .tag(MusicTab.library)
+                NavigationStack { StatsView(settingsAction: { settings = true }) }
+                    .safeAreaInset(edge: .bottom, spacing: 0) { floatingMiniPlayer(for: .stats) }
+                    .toolbarBackground(.visible, for: .tabBar)
+                    .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+                    .tabItem { Label(MusicTab.stats.rawValue, systemImage: MusicTab.stats.symbol).accessibilityIdentifier("tab-stats") }
+                    .tag(MusicTab.stats)
+            }.tint(MusicDesign.accent)
+                .accessibilityHidden(expanded).allowsHitTesting(!expanded)
                 .scaleEffect(expanded && !reduceMotion ? 0.96 : 1, anchor: .top)
             ZStack {
                 if expanded, player.current != nil {
@@ -136,6 +128,9 @@ struct MiniPlayer: View {
                 .foregroundStyle(.primary).accessibilityLabel(player.isPlaying ? "暂停" : "播放")
             AirPlayButton().frame(width: 42, height: 44)
         }.padding(.leading, 8).padding(.trailing, 4).frame(height: 58)
-            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
+            .padding(.horizontal, 8).padding(.bottom, 4)
     }
 }
