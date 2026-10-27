@@ -79,14 +79,14 @@ struct FlowingArtworkBackground: View {
         TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !active || reduceMotion || !animated || scenePhase != .active)) { context in
             let phase = reduceMotion || !animated ? 0 : elapsed / 12
             GeometryReader { proxy in
-                ZStack {
-                    colors[1]
-                    Ellipse().fill(colors[0]).frame(width: proxy.size.width * 1.6, height: proxy.size.height * 0.95)
-                        .offset(x: sin(phase * 0.7) * proxy.size.width * 0.32, y: -proxy.size.height * 0.3 + cos(phase) * 70)
-                    Ellipse().fill(colors[2]).frame(width: proxy.size.width * 1.5, height: proxy.size.height * 0.8)
-                        .offset(x: cos(phase * 0.8) * proxy.size.width * 0.4, y: proxy.size.height * 0.3 + sin(phase) * 80)
-                }.blur(radius: 80, opaque: true).saturation(1.3)
-                    .overlay { Color.black.opacity(0.2) }
+                Canvas { context, size in
+                    let bounds = Path(CGRect(origin: .zero, size: size))
+                    context.fill(bounds, with: .color(colors[1]))
+                    let first = CGPoint(x: size.width * (0.25 + sin(phase * 0.7) * 0.3), y: size.height * (0.2 + cos(phase) * 0.12))
+                    let second = CGPoint(x: size.width * (0.75 + cos(phase * 0.8) * 0.3), y: size.height * (0.8 + sin(phase) * 0.12))
+                    context.fill(bounds, with: .radialGradient(Gradient(colors: [colors[0], colors[0].opacity(0)]), center: first, startRadius: 0, endRadius: size.height * 0.9))
+                    context.fill(bounds, with: .radialGradient(Gradient(colors: [colors[2], colors[2].opacity(0)]), center: second, startRadius: 0, endRadius: size.height * 0.85))
+                }.overlay { Color.black.opacity(0.2) }
                     .frame(width: proxy.size.width, height: proxy.size.height).clipped()
             }
             .onChange(of: context.date) { previous, now in
@@ -135,7 +135,11 @@ private enum ArtworkPalette {
         }
         guard let first = selected.first else { return fallback }
         while selected.count < 3 { selected.append((first.0 * 0.65, first.1 * 0.65, first.2 * 0.65)) }
-        return selected.map { Color(red: $0.0, green: $0.1, blue: $0.2) }
+        return selected.map { red, green, blue in
+            let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+            let scale = min(1, 0.42 / max(0.01, luminance))
+            return Color(red: red * scale, green: green * scale, blue: blue * scale)
+        }
     }
 }
 
