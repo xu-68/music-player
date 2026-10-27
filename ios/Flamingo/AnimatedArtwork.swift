@@ -14,11 +14,11 @@ struct AnimatedAlbumArtwork: View {
             .map { $0.trimmingCharacters(in: .whitespaces) }.contains(track?.album ?? "")
     }
     var body: some View {
-        ArtworkView(track: track, radius: 10)
+        ArtworkView(track: track, radius: 16)
             .overlay {
                 if allowed, let name = track?.videoFilename {
                     LoopingVideo(url: LibraryPaths.video.appending(path: name), playing: active && phase == .active)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 }
             }
     }

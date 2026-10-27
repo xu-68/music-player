@@ -11,6 +11,28 @@ final class FlamingoUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 20))
     }
+    func testRedesignedPlayerWhileAudioIsAdvancing() {
+        app.buttons["mini-player"].tap()
+        let toggle = app.buttons["player-play-pause"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        toggle.tap()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "暂停"), object: toggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 8), .completed)
+        let progress = app.descendants(matching: .any)["playback-progress"].firstMatch
+        let advancing = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let parts = (progress.value as? String ?? "").components(separatedBy: "，")[0].split(separator: ":").compactMap { Double($0) }
+            return parts.count == 2 && parts[0] * 60 + parts[1] >= 3
+        }, object: progress)
+        XCTAssertEqual(XCTWaiter.wait(for: [advancing], timeout: 10), .completed)
+        capture("14-redesigned-player-playing")
+        app.buttons["show-lyrics"].tap()
+        XCTAssertTrue(app.buttons["lyric-0"].waitForExistence(timeout: 5))
+        capture("15-redesigned-lyrics-playing")
+        app.buttons["show-queue"].tap()
+        XCTAssertTrue(app.staticTexts["待播清单"].waitForExistence(timeout: 5))
+        capture("16-redesigned-queue-playing")
+        toggle.tap()
+    }
     func testManagedMusicScanAndSourceDeletion() {
         app.buttons["tab-library"].tap()
         app.buttons["library-songs"].tap()

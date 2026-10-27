@@ -4,7 +4,7 @@ import SwiftUI
 enum PlayerPreferences {
     static func register() {
         AppPreferences.defaults.register(defaults: [
-            "appearance": "system", "animatedBackground": false, "lyricBlur": false,
+            "appearance": "system", "animatedBackground": true, "lyricBlur": false,
             "showVolume": true, "showTranslation": true, "lyricWeight": "ExtraBold",
             "lyricBalance": false, "barBlur": false, "playerCorner": 30.0,
             "animatedCovers": false, "artworkBlacklist": "",

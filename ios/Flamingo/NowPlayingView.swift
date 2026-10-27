@@ -94,9 +94,10 @@ struct NowPlayingView: View {
                     .matchedGeometryEffect(id: "player-artwork", in: namespace)
                     .frame(width: side, height: side)
                     .scaleEffect(player.isPlaying ? 1 : 0.83)
-                    .shadow(color: .black.opacity(player.isPlaying ? 0.28 : 0.18), radius: player.isPlaying ? 24 : 12, y: player.isPlaying ? 18 : 10)
+                    .shadow(color: .black.opacity(0.33), radius: 18, y: 18)
+                    .shadow(color: .black.opacity(0.5), radius: 30, y: 30)
                     .animation(reduceMotion ? nil : player.isPlaying ? MusicDesign.spring : .timingCurve(0.16, 1, 0.3, 1, duration: 0.35), value: player.isPlaying)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }.gesture(dismissGesture)
         case .lyrics:
             LyricsView().transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.98)))
@@ -107,12 +108,12 @@ struct NowPlayingView: View {
     private var metadata: some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(player.current?.title ?? "").font(.system(size: 23, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(player.current?.title ?? "").font(.system(size: 24, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                 Menu {
                     if let track = player.current {
                         ForEach(library.artists(for: track), id: \.self) { name in Button(name) { library.navigationTarget = .artist(name) } }
                     }
-                } label: { Text(player.current?.artist ?? "").font(.system(size: 21)).foregroundStyle(.white.opacity(0.58)).lineLimit(1) }
+                } label: { Text(player.current?.artist ?? "").font(.system(size: 18, weight: .regular)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button { if let track = player.current { library.toggleFavorite(track.id) } } label: {
                 Image(systemName: player.current?.isFavorite == true ? "star.fill" : "star")
@@ -132,16 +133,12 @@ struct NowPlayingView: View {
         }
     }
     private var transport: some View {
-        HStack {
-            Spacer()
-            Button(action: player.previous) { Image(systemName: "backward.fill").font(.system(size: 31)).frame(width: 64, height: 58) }.accessibilityLabel("上一首")
-            Spacer()
-            Button(action: player.toggle) { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 43)).frame(width: 70, height: 62).contentTransition(.symbolEffect(.replace)) }
+        HStack(spacing: 40) {
+            Button(action: player.previous) { Image(systemName: "backward.fill").font(.system(size: 31)).frame(width: 48, height: 62) }.accessibilityLabel("上一首")
+            Button(action: player.toggle) { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 43)).frame(width: 64, height: 62).contentTransition(.symbolEffect(.replace)) }
                 .accessibilityLabel(player.isPlaying ? "暂停" : "播放").accessibilityIdentifier("player-play-pause")
-            Spacer()
-            Button { player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 31)).frame(width: 64, height: 58) }.accessibilityLabel("下一首")
-            Spacer()
-        }.buttonStyle(PressStyle())
+            Button { player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 31)).frame(width: 48, height: 62) }.accessibilityLabel("下一首")
+        }.frame(maxWidth: .infinity).foregroundStyle(.white).buttonStyle(PressStyle())
     }
     private var volume: some View {
         HStack(spacing: 14) {
@@ -153,17 +150,21 @@ struct NowPlayingView: View {
     private var footer: some View {
         HStack {
             Button { panel = panel == .lyrics ? .artwork : .lyrics } label: {
-                Image(systemName: "quote.bubble").font(.system(size: 21)).frame(width: 46, height: 40)
+                Image(systemName: "quote.bubble").font(.system(size: 21)).frame(width: 46, height: 44)
                     .background(panel == .lyrics ? .white.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 8))
             }.accessibilityLabel("歌词").accessibilityIdentifier("show-lyrics")
             Spacer()
             AirPlayButton(white: true).frame(width: 48, height: 44)
             Spacer()
             Button { panel = panel == .queue ? .artwork : .queue } label: {
-                Image(systemName: "list.bullet").font(.system(size: 22)).frame(width: 46, height: 40)
+                Image(systemName: "list.bullet").font(.system(size: 22)).frame(width: 46, height: 44)
                     .background(panel == .queue ? .white.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 8))
             }.accessibilityLabel("待播清单").accessibilityIdentifier("show-queue")
-        }.foregroundStyle(.white.opacity(0.72)).buttonStyle(PressStyle())
+        }.padding(.horizontal, 18).padding(.vertical, 6)
+            .background { PlayerGlassSurface() }
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.05)).frame(height: 1).padding(.horizontal, 20) }
+            .foregroundStyle(.white.opacity(0.85)).buttonStyle(PressStyle())
     }
 }
 
@@ -200,8 +201,8 @@ private struct ProgressScrubber: View {
     var body: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.22))
-                Capsule().fill(.white.opacity(touching ? 0.95 : 0.5)).frame(width: max(4, proxy.size.width * fraction))
+                Capsule().fill(.white.opacity(0.2))
+                Capsule().fill(.white).frame(width: max(4, proxy.size.width * fraction))
             }.frame(height: touching ? 9 : 4).frame(maxHeight: .infinity).contentShape(Rectangle())
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { event in touching = true; changed(min(max(0, event.location.x / max(proxy.size.width, 1)), 1) * total) }

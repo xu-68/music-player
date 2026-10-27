@@ -54,30 +54,88 @@ struct ArtworkTint: View {
     }
 }
 
+// UIKit's public material API supplies adaptive backdrop blur and saturation.
+// It deliberately avoids private filters with undocumented radius controls.
+struct PlayerGlassSurface: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIVisualEffectView {
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
+        view.contentView.backgroundColor = UIColor.black.withAlphaComponent(0.1)
+        view.isUserInteractionEnabled = false
+        return view
+    }
+    func updateUIView(_ view: UIVisualEffectView, context: Context) {}
+}
+
 struct FlowingArtworkBackground: View {
     var track: Track?
     var active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("animatedBackground") private var animated = false
+    @AppStorage("animatedBackground") private var animated = true
+    @State private var colors: [Color] = [.init(red: 0.3, green: 0.35, blue: 0.38), .init(red: 0.15, green: 0.2, blue: 0.23), .init(red: 0.4, green: 0.33, blue: 0.3)]
+    @State private var elapsed: TimeInterval = 0
+    @State private var lastTick: Date?
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !active || reduceMotion || !animated || scenePhase != .active)) { context in
-            let phase = reduceMotion || !animated ? 0 : context.date.timeIntervalSinceReferenceDate / 12
+            let phase = reduceMotion || !animated ? 0 : elapsed / 12
             GeometryReader { proxy in
                 ZStack {
-                    Color(red: 0.22, green: 0.18, blue: 0.2)
-                    if let image = ArtworkCache.shared.image(track?.artworkFilename) {
-                        Image(uiImage: image).resizable().scaledToFill()
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                            .scaleEffect(1.5).rotationEffect(.degrees(sin(phase) * 16))
-                            .offset(x: sin(phase * 0.7) * 40, y: cos(phase * 0.8) * 60)
-                            .blur(radius: 65, opaque: true).saturation(1.35)
-                    }
-                    Color.black.opacity(0.28)
-                    LinearGradient(colors: [.black.opacity(0.04), .black.opacity(0.35)], startPoint: .top, endPoint: .bottom)
-                }.frame(width: proxy.size.width, height: proxy.size.height).clipped()
+                    colors[1]
+                    Ellipse().fill(colors[0]).frame(width: proxy.size.width * 1.6, height: proxy.size.height * 0.95)
+                        .offset(x: sin(phase * 0.7) * proxy.size.width * 0.32, y: -proxy.size.height * 0.3 + cos(phase) * 70)
+                    Ellipse().fill(colors[2]).frame(width: proxy.size.width * 1.5, height: proxy.size.height * 0.8)
+                        .offset(x: cos(phase * 0.8) * proxy.size.width * 0.4, y: proxy.size.height * 0.3 + sin(phase) * 80)
+                }.blur(radius: 80, opaque: true).saturation(1.3)
+                    .overlay { Color.black.opacity(0.2) }
+                    .frame(width: proxy.size.width, height: proxy.size.height).clipped()
             }
+            .onChange(of: context.date) { previous, now in
+                if active && animated && !reduceMotion && scenePhase == .active {
+                    // Clamp the interval so resuming never jumps to a new mesh position.
+                    elapsed += min(0.1, max(0, now.timeIntervalSince(lastTick ?? previous)))
+                }
+                lastTick = now
+            }
+        }.task(id: track?.artworkFilename) {
+            colors = ArtworkPalette.colors(from: ArtworkCache.shared.image(track?.artworkFilename))
         }.ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
+private enum ArtworkPalette {
+    static func colors(from image: UIImage?) -> [Color] {
+        let fallback: [Color] = [.init(red: 0.3, green: 0.35, blue: 0.38), .init(red: 0.15, green: 0.2, blue: 0.23), .init(red: 0.4, green: 0.33, blue: 0.3)]
+        guard let source = image?.cgImage else { return fallback }
+        // Read a tiny thumbnail only when the cover changes, never in the animation loop.
+        var pixels = [UInt8](repeating: 0, count: 16 * 16 * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(data: buffer.baseAddress, width: 16, height: 16, bitsPerComponent: 8, bytesPerRow: 64, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(source, in: CGRect(x: 0, y: 0, width: 16, height: 16))
+            return true
+        }
+        guard drawn else { return fallback }
+        var buckets: [Int: (count: Int, r: Double, g: Double, b: Double)] = [:]
+        for i in stride(from: 0, to: pixels.count, by: 4) {
+            let r = Double(pixels[i]) / 255, g = Double(pixels[i + 1]) / 255, b = Double(pixels[i + 2]) / 255
+            let light = 0.2126 * r + 0.7152 * g + 0.0722 * b
+            guard pixels[i + 3] > 200, light > 0.06, light < 0.92 else { continue }
+            let key = (Int(r * 7) << 6) | (Int(g * 7) << 3) | Int(b * 7)
+            let old = buckets[key] ?? (0, 0, 0, 0)
+            buckets[key] = (old.count + 1, old.r + r, old.g + g, old.b + b)
+        }
+        let ranked = buckets.values.sorted { $0.count > $1.count }
+        var selected: [(Double, Double, Double)] = []
+        for bucket in ranked {
+            let n = Double(bucket.count)
+            let candidate = (bucket.r / n, bucket.g / n, bucket.b / n)
+            if selected.allSatisfy({ abs($0.0 - candidate.0) + abs($0.1 - candidate.1) + abs($0.2 - candidate.2) > 0.25 }) {
+                selected.append(candidate)
+            }
+            if selected.count == 3 { break }
+        }
+        guard let first = selected.first else { return fallback }
+        while selected.count < 3 { selected.append((first.0 * 0.65, first.1 * 0.65, first.2 * 0.65)) }
+        return selected.map { Color(red: $0.0, green: $0.1, blue: $0.2) }
     }
 }
 
