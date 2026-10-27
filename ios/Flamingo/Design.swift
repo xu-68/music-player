@@ -54,12 +54,29 @@ struct ArtworkTint: View {
     }
 }
 
+// Local cover light gives glass a real colored surface to sample, even on an empty library page.
+struct DockArtworkGlow: View {
+    var track: Track?
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        GeometryReader { proxy in
+            if let image = ArtworkCache.shared.image(track?.artworkFilename) {
+                Image(uiImage: image).resizable().scaledToFill()
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .blur(radius: 45).saturation(1.3).opacity(scheme == .dark ? 0.3 : 0.18)
+                    .mask { LinearGradient(colors: [.clear, .black.opacity(0.35), .black], startPoint: .top, endPoint: .bottom) }
+                    .clipped()
+            }
+        }
+    }
+}
+
 // UIKit's public material API supplies adaptive backdrop blur and saturation.
 // It deliberately avoids private filters with undocumented radius controls.
 struct PlayerGlassSurface: UIViewRepresentable {
     func makeUIView(context: Context) -> UIVisualEffectView {
         let view = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterialDark))
-        view.contentView.backgroundColor = UIColor.black.withAlphaComponent(0.1)
+        view.contentView.backgroundColor = .clear
         view.isUserInteractionEnabled = false
         return view
     }
@@ -84,15 +101,15 @@ struct FlowingArtworkBackground: View {
                 ZStack {
                     colors[1]
                     Ellipse().fill(colors[0])
-                        .frame(width: proxy.size.width * 1.8, height: proxy.size.height * 1.1)
+                        .frame(width: proxy.size.width * 1.45, height: proxy.size.height * 0.8)
                         .offset(x: -proxy.size.width * 0.3 + sin(phase * 0.7) * 90,
                                 y: -proxy.size.height * 0.3 + cos(phase) * 80)
                     Ellipse().fill(colors[2])
-                        .frame(width: proxy.size.width * 1.7, height: proxy.size.height)
+                        .frame(width: proxy.size.width * 1.5, height: proxy.size.height * 0.75)
                         .offset(x: proxy.size.width * 0.35 + cos(phase * 0.8) * 100,
                                 y: proxy.size.height * 0.3 + sin(phase) * 90)
                     Circle().fill(colors[0].opacity(0.65))
-                        .frame(width: proxy.size.width * 1.25)
+                        .frame(width: proxy.size.width * 0.9)
                         .offset(x: sin(phase * 0.6) * 80, y: proxy.size.height * 0.1)
                 }.frame(width: proxy.size.width + 480, height: proxy.size.height + 480)
                     .compositingGroup().blur(radius: 120)
@@ -133,23 +150,39 @@ private enum ArtworkPalette {
             let old = buckets[key] ?? (0, 0, 0, 0)
             buckets[key] = (old.count + 1, old.r + r, old.g + g, old.b + b)
         }
-        let ranked = buckets.values.sorted { $0.count > $1.count }
-        var selected: [(Double, Double, Double)] = []
-        for bucket in ranked {
-            let n = Double(bucket.count)
-            let candidate = (bucket.r / n, bucket.g / n, bucket.b / n)
-            if selected.allSatisfy({ abs($0.0 - candidate.0) + abs($0.1 - candidate.1) + abs($0.2 - candidate.2) > 0.25 }) {
-                selected.append(candidate)
+        // Favor colors that occupy real area AND carry chroma; a flat gray must not
+        // crowd out both the blue cover background and warm skin/lettering colors.
+        let ranked = buckets.values.sorted { lhs, rhs in
+            func score(_ value: (count: Int, r: Double, g: Double, b: Double)) -> Double {
+                let n = Double(value.count)
+                let chroma = (max(value.r, max(value.g, value.b)) - min(value.r, min(value.g, value.b))) / n
+                return sqrt(n) * (0.12 + chroma * 3)
             }
-            if selected.count == 3 { break }
+            return score(lhs) > score(rhs)
         }
-        guard let first = selected.first else { return fallback }
-        while selected.count < 3 { selected.append((first.0 * 0.65, first.1 * 0.65, first.2 * 0.65)) }
-        return selected.map { red, green, blue in
-            let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-            let scale = min(1, 0.42 / max(0.01, luminance))
-            return Color(red: red * scale, green: green * scale, blue: blue * scale)
+        guard let dominant = ranked.first else { return fallback }
+        let count = Double(dominant.count)
+        let primary = (dominant.r / count, dominant.g / count, dominant.b / count)
+        let secondary = ranked.dropFirst().max { lhs, rhs in
+            func distance(_ value: (count: Int, r: Double, g: Double, b: Double)) -> Double {
+                let n = Double(value.count)
+                let chroma = (max(value.r, max(value.g, value.b)) - min(value.r, min(value.g, value.b))) / n
+                return (abs(value.r / n - primary.0) + abs(value.g / n - primary.1) + abs(value.b / n - primary.2)) * sqrt(n) * (0.15 + chroma * 3)
+            }
+            return distance(lhs) < distance(rhs)
         }
+        let accent: (Double, Double, Double)
+        if let secondary {
+            let n = Double(secondary.count)
+            accent = (secondary.r / n, secondary.g / n, secondary.b / n)
+        } else { accent = (primary.0 * 0.5, primary.1 * 0.5, primary.2 * 0.5) }
+        func tinted(_ rgb: (Double, Double, Double), brightness: CGFloat) -> Color {
+            let source = UIColor(red: rgb.0, green: rgb.1, blue: rgb.2, alpha: 1)
+            var hue: CGFloat = 0, saturation: CGFloat = 0, value: CGFloat = 0, alpha: CGFloat = 0
+            source.getHue(&hue, saturation: &saturation, brightness: &value, alpha: &alpha)
+            return Color(uiColor: UIColor(hue: hue, saturation: min(0.8, saturation * 1.3), brightness: brightness, alpha: 1))
+        }
+        return [tinted(primary, brightness: 0.62), tinted(primary, brightness: 0.22), tinted(accent, brightness: 0.48)]
     }
 }
 

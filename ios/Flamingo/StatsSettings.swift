@@ -205,7 +205,7 @@ struct SettingsView: View {
                     Button("清空最近播放", role: .destructive) { clearing = "最近播放"; confirmClear = true }
                 } header: { Text("历史与备份") } footer: { Text("支持原版 Flamingo 统计 JSON。合并导入会按原始事件标识去重。") }
                 Section("关于 Flamingo") {
-                    LabeledContent("版本", value: "2.1.0 · iOS 原生重建")
+                    LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
                     Text("SwiftUI · UIKit · AVFoundation · FFmpeg。Xposed 状态栏歌词、Android 通知图标和 AudioTrack 参数为 Android 专属；iOS 使用系统锁屏控制、后台音频和 AirPlay。").font(.footnote).foregroundStyle(.secondary)
                     Link("原项目与源代码", destination: URL(string: "https://github.com/shouryadixitisverycool/Flamingo")!)
                     NavigationLink("开源许可") { LicenseView() }

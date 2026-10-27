@@ -20,10 +20,31 @@ struct RootView: View {
     private func expandPlayer() { withAnimation(reduceMotion ? .easeOut(duration: 0.15) : MusicDesign.spring) { expanded = true } }
     private func closePlayer() { withAnimation(reduceMotion ? .easeOut(duration: 0.15) : MusicDesign.spring) { expanded = false } }
 
-    @ViewBuilder private func floatingMiniPlayer(for destination: MusicTab) -> some View {
-        if tab == destination, player.current != nil {
-            MiniPlayer(namespace: playerNamespace, expanded: expanded, open: expandPlayer)
-        }
+    private var floatingDock: some View {
+        VStack(spacing: 10) {
+            if player.current != nil {
+                MiniPlayer(namespace: playerNamespace, expanded: expanded, open: expandPlayer)
+            }
+            HStack(spacing: 0) {
+                ForEach(MusicTab.allCases, id: \.self) { destination in
+                    Button { tab = destination } label: {
+                        VStack(spacing: 3) {
+                            Image(systemName: destination.symbol).font(.system(size: 22, weight: .semibold))
+                            Text(destination.rawValue).font(.system(size: 10, weight: .medium))
+                        }.frame(maxWidth: .infinity).frame(height: 54)
+                            .foregroundStyle(tab == destination ? MusicDesign.accent : Color.primary.opacity(0.65))
+                            .background {
+                                if tab == destination { Capsule().fill(.primary.opacity(0.06)).padding(4) }
+                            }.contentShape(Capsule())
+                    }.buttonStyle(PressStyle()).accessibilityIdentifier("tab-\(destination)")
+                        .accessibilityAddTraits(tab == destination ? .isSelected : [])
+                }
+            }.padding(4).background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay { Capsule().strokeBorder(.white.opacity(0.4), lineWidth: 0.5) }
+                .shadow(color: .black.opacity(0.1), radius: 16, y: 5)
+                .padding(.horizontal, 12)
+        }.padding(.horizontal, 8).padding(.bottom, 8)
     }
 
     var body: some View {
@@ -34,9 +55,8 @@ struct RootView: View {
             Color(uiColor: .systemBackground).ignoresSafeArea()
             TabView(selection: $tab) {
                 NavigationStack { HomeView(importAction: { Task { await library.scanMusic() } }, settingsAction: { settings = true }) }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { floatingMiniPlayer(for: .home) }
-                    .toolbarBackground(.visible, for: .tabBar)
-                    .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: player.current == nil ? 78 : 146).allowsHitTesting(false) }
+                    .toolbar(.hidden, for: .tabBar)
                     .tabItem { Label(MusicTab.home.rawValue, systemImage: MusicTab.home.symbol).accessibilityIdentifier("tab-home") }
                     .tag(MusicTab.home)
                 NavigationStack(path: $libraryPath) {
@@ -48,20 +68,23 @@ struct RootView: View {
                             }
                         }
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) { floatingMiniPlayer(for: .library) }
-                .toolbarBackground(.visible, for: .tabBar)
-                .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+                .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: player.current == nil ? 78 : 146).allowsHitTesting(false) }
+                .toolbar(.hidden, for: .tabBar)
                 .tabItem { Label(MusicTab.library.rawValue, systemImage: MusicTab.library.symbol).accessibilityIdentifier("tab-library") }
                 .tag(MusicTab.library)
                 NavigationStack { StatsView(settingsAction: { settings = true }) }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { floatingMiniPlayer(for: .stats) }
-                    .toolbarBackground(.visible, for: .tabBar)
-                    .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+                    .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: player.current == nil ? 78 : 146).allowsHitTesting(false) }
+                    .toolbar(.hidden, for: .tabBar)
                     .tabItem { Label(MusicTab.stats.rawValue, systemImage: MusicTab.stats.symbol).accessibilityIdentifier("tab-stats") }
                     .tag(MusicTab.stats)
             }.tint(MusicDesign.accent)
                 .accessibilityHidden(expanded).allowsHitTesting(!expanded)
                 .scaleEffect(expanded && !reduceMotion ? 0.96 : 1, anchor: .top)
+            ZStack(alignment: .bottom) {
+                DockArtworkGlow(track: player.current).frame(height: 200)
+                    .allowsHitTesting(false).accessibilityHidden(true)
+                floatingDock
+            }.accessibilityHidden(expanded).allowsHitTesting(!expanded).zIndex(1)
             ZStack {
                 if expanded, player.current != nil {
                     NowPlayingView(namespace: playerNamespace, safeArea: geometry.safeAreaInsets, close: closePlayer)
@@ -130,7 +153,8 @@ struct MiniPlayer: View {
         }.padding(.leading, 8).padding(.trailing, 4).frame(height: 58)
             .background(.ultraThinMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(.white.opacity(0.45), lineWidth: 0.5) }
             .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
-            .padding(.horizontal, 8).padding(.bottom, 4)
+            .padding(.bottom, 4)
     }
 }
