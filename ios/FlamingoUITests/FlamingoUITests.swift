@@ -80,11 +80,12 @@ final class FlamingoUITests: XCTestCase {
         capture("05-queue")
         app.buttons["close-player"].tap()
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 5))
-        app.buttons["tab-search"].tap()
-        XCTAssertTrue(app.navigationBars["Search"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["tab-search"].exists)
+        app.buttons["library-songs"].tap()
+        XCTAssertTrue(app.navigationBars["歌曲"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.searchFields.firstMatch.exists)
         XCTAssertTrue(app.buttons["mini-player-next"].isHittable)
-        capture("06-search", verifyingDock: true)
+        capture("06-songs-search", verifyingDock: true)
     }
     func testPlaybackAndSeekFromLyrics() {
         app.buttons["mini-player"].tap()

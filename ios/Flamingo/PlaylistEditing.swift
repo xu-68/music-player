@@ -159,12 +159,10 @@ private struct PlaylistSongPicker: View {
     var add: (UUID) -> Void
     @Environment(LibraryStore.self) private var library
     @Environment(\.dismiss) private var dismiss
-    @State private var query = ""
     @State private var added: [UUID: Int] = [:]
-    @State private var matches: [Track] = []
     var body: some View {
         NavigationStack {
-            List(matches) { track in
+            List(library.tracks) { track in
                 Button { add(track.id); added[track.id, default: 0] += 1 } label: {
                     HStack(spacing: 12) {
                         ArtworkView(track: track).frame(width: 42, height: 42)
@@ -174,14 +172,9 @@ private struct PlaylistSongPicker: View {
                         Image(systemName: "plus.circle.fill")
                     }
                 }.accessibilityIdentifier("picker-song-\(track.title)")
-            }.navigationTitle("添加歌曲").searchable(text: $query, prompt: "歌曲、艺人或标签")
+            }.navigationTitle("添加歌曲")
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-                .task(id: query) {
-                    do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
-                    let tracks = library.tracks, search = query
-                    let result = await Task.detached { MusicSearch.ranked(tracks, query: search) }.value
-                    if !Task.isCancelled { matches = result }
-                }
+
         }
     }
 }

@@ -24,15 +24,31 @@ struct HomeView: View {
                     }
                 }
             }
-        }.navigationTitle("主页")
-            .task(id: library.tracks.map(\.id)) {
-                if recommendationIDs.isEmpty || recommendationIDs.contains(where: { library.track($0) == nil }) { recommendationIDs = Array(library.tracks.shuffled().prefix(5).map(\.id)) }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("扫描媒体库", systemImage: "arrow.clockwise", action: importAction).disabled(library.importing) }
-                ToolbarItem(placement: .topBarTrailing) { Button("设置", systemImage: "person.crop.circle", action: settingsAction).font(.title2) }
-            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("主页").font(MusicTypography.largeTitle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                Button("扫描媒体库", systemImage: "arrow.clockwise", action: importAction)
+                    .labelStyle(.iconOnly).font(.system(size: 21))
+                    .frame(width: 44, height: 44).disabled(library.importing)
+                Button(action: settingsAction) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 30, weight: .regular))
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }.accessibilityLabel("设置")
+            }.tint(MusicDesign.accent)
+                .padding(.leading, MusicDesign.pageInset).padding(.trailing, 13)
+                .padding(.top, 8).padding(.bottom, 12)
+                .background(Color(uiColor: .systemBackground))
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .task(id: library.tracks.map(\.id)) {
+            if recommendationIDs.isEmpty || recommendationIDs.contains(where: { library.track($0) == nil }) { recommendationIDs = Array(library.tracks.shuffled().prefix(5).map(\.id)) }
+        }
     }
+
     private func shelf(title: String, tracks: [Track], width: CGFloat, featured: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(title).font(MusicTypography.title).padding(.horizontal, MusicDesign.pageInset)
@@ -118,12 +134,11 @@ struct AlbumGrid: View {
 
 struct AlbumsView: View {
     @Environment(LibraryStore.self) private var library
-    @State private var query = ""
     var body: some View {
         ScrollView {
-            AlbumGrid(albums: library.albums.filter { query.isEmpty || $0.contains { $0.matches(query) } })
+            AlbumGrid(albums: library.albums)
                 .padding(MusicDesign.pageInset)
-        }.navigationTitle("专辑").searchable(text: $query, prompt: "搜索专辑")
+        }.navigationTitle("专辑")
             .overlay { if library.albums.isEmpty { MusicEmptyState(title: "还没有专辑", message: "导入带有专辑标签的音频后，会在这里自动整理。", symbol: "square.stack") } }
     }
 }
@@ -182,12 +197,11 @@ struct SongsView: View {
 
 struct ArtistsView: View {
     @Environment(LibraryStore.self) private var library
-    @State private var query = ""
     private var artists: [String] {
         Set(library.tracks.flatMap { library.artists(for: $0) }).sorted {
             let a = library.snapshot.followedArtists.contains($0), b = library.snapshot.followedArtists.contains($1)
             return a == b ? $0.localizedStandardCompare($1) == .orderedAscending : a
-        }.filter { query.isEmpty || $0.localizedStandardContains(query) }
+        }
     }
     var body: some View {
         List(artists, id: \.self) { artist in
@@ -199,20 +213,19 @@ struct ArtistsView: View {
                     if library.snapshot.followedArtists.contains(artist) { Image(systemName: "star.fill").font(MusicTypography.caption).foregroundStyle(MusicDesign.accent) }
                 }.padding(.vertical, 4)
             }
-        }.listStyle(.plain).navigationTitle("艺人").searchable(text: $query, prompt: "搜索艺人")
-            .overlay { if artists.isEmpty { MusicEmptyState(title: "没有找到艺人", message: "导入音频或尝试其他搜索词。", symbol: "music.mic") } }
+        }.listStyle(.plain).navigationTitle("艺人")
+            .overlay { if artists.isEmpty { MusicEmptyState(title: "没有找到艺人", message: "导入带有艺人标签的音频后，会在这里自动整理。", symbol: "music.mic") } }
     }
 }
 
 struct PlaylistsView: View {
     @Environment(LibraryStore.self) private var library
     @State private var creating = false
-    @State private var query = ""
     @State private var deleted: Playlist?
     @State private var editingPlaylist: Playlist?
     @Environment(PlayerStore.self) private var player
     private var playlists: [Playlist] {
-        library.playlists.filter { query.isEmpty || $0.name.localizedStandardContains(query) }.sorted {
+        library.playlists.sorted {
             if ($0.isPinned == true) != ($1.isPinned == true) { return $0.isPinned == true }
             if $0.isPinned == true { return ($0.pinOrder ?? .max) < ($1.pinOrder ?? .max) }
             return $0.name.localizedStandardCompare($1.name) == .orderedAscending
@@ -235,7 +248,7 @@ struct PlaylistsView: View {
                     Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(library.tracks(for: playlist).map(\.id), next: true) }
                     Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
                     Button("删除", role: .destructive) { deleted = playlist; library.deletePlaylist(playlist.id) }
-                }.moveDisabled(playlist.isPinned != true || !query.isEmpty)
+                }.moveDisabled(playlist.isPinned != true)
             }.onDelete { offsets in
                 let values = offsets.map { playlists[$0] }
                 for value in values { deleted = value; library.deletePlaylist(value.id) }
@@ -245,7 +258,6 @@ struct PlaylistsView: View {
                 pins.move(fromOffsets: valid, toOffset: min(to, pins.count)); library.reorderPins(pins.map(\.id))
             }
         }.listStyle(.plain).navigationTitle("歌单")
-            .searchable(text: $query, prompt: "搜索歌单")
             .safeAreaInset(edge: .bottom) {
                 if let value = deleted {
                     HStack { Text("已删除“\(value.name)”").lineLimit(1); Spacer(); Button("撤销") { library.restorePlaylist(value); deleted = nil }; Button("完成") { deleted = nil } }
@@ -269,14 +281,13 @@ struct PlaylistDetailView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
     @State private var editing = false
-    @State private var query = ""
     @State private var sort = "手动顺序"
     @State private var descending = false
     private var playlist: Playlist? { library.playlists.first { $0.id == id } }
     private var tracks: [Track] {
         let values = playlist.map(library.tracks(for:)) ?? []
         let sorted = sort == "最近添加" ? SongSort.modified.sorted(values, descending: descending) : SongSort(rawValue: sort)?.sorted(values, descending: descending) ?? (descending ? Array(values.reversed()) : values)
-        return MusicSearch.ranked(sorted, query: query)
+        return sorted
     }
     private var occurrences: [PlaylistTrackOccurrence] {
         let source = (playlist?.trackIDs ?? []).enumerated().compactMap { index, id in
@@ -297,21 +308,20 @@ struct PlaylistDetailView: View {
             CollectionPlayButtons(tracks: tracks).listRowSeparator(.hidden)
             ForEach(Array(occurrences.enumerated()), id: \.element.id) { index, occurrence in
                 TrackRow(track: occurrence.track) { player.play(occurrence.track, in: tracks, startingAt: index) }.contextMenu { TrackActions(track: occurrence.track) }
-                    .moveDisabled(!query.isEmpty || sort != "手动顺序" || descending)
+                    .moveDisabled(sort != "手动顺序" || descending)
             }.onDelete { offsets in
                 guard var value = playlist else { return }
                 let visible = occurrences
                 let positions = IndexSet(offsets.map { visible[$0].position })
                 value.trackIDs.remove(atOffsets: positions); library.updatePlaylist(value)
             }.onMove { from, to in
-                guard var value = playlist, query.isEmpty, sort == "手动顺序", !descending else { return }
+                guard var value = playlist, sort == "手动顺序", !descending else { return }
                 let displayed = occurrences
                 let positions = IndexSet(from.map { displayed[$0].position })
                 let destination = to < displayed.count ? displayed[to].position : value.trackIDs.count
                 value.trackIDs.move(fromOffsets: positions, toOffset: destination); library.updatePlaylist(value)
             }
         }.listStyle(.plain).navigationTitle(playlist?.name ?? "歌单")
-            .searchable(text: $query, prompt: "搜索歌单中的歌曲")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { SongSortMenu(sort: $sort, descending: $descending, manual: true) }
                 ToolbarItem(placement: .topBarTrailing) { Button("编辑歌单", systemImage: "pencil") { editing = true } }

@@ -5,22 +5,19 @@ struct AlbumDetailView: View {
     let albumKey: String
     @Environment(LibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
-    @State private var query = ""
     @State private var titleOrder = false
     @State private var descending = false
-    @State private var searching = false
     private var album: [Track] { library.albums.first { $0.first?.albumKey == albumKey } ?? [] }
     private var tracks: [Track] {
         let sorted = titleOrder ? SongSort.title.sorted(album, descending: descending) : descending ? Array(album.reversed()) : album
-        return sorted.filter { $0.matches(query) }
+        return sorted
     }
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 CollectionHero(track: album.first, title: album.first?.album ?? "专辑",
                                subtitle: album.first.map { $0.albumArtist.isEmpty ? $0.artist : $0.albumArtist } ?? "",
-                               detail: "\(album.count) 首歌曲 · \(Int(album.reduce(0) { $0 + $1.duration }) / 60) 分钟", tracks: tracks,
-                               search: { searching = true })
+                               detail: "\(album.count) 首歌曲 · \(Int(album.reduce(0) { $0 + $1.duration }) / 60) 分钟", tracks: tracks)
                 ForEach(Array(tracks.enumerated()), id: \.element.id) { index, track in
                     HStack {
                         TrackRow(track: track, showArtwork: false, number: track.trackNumber > 0 ? track.trackNumber : index + 1) { player.play(track, in: tracks) }
@@ -30,7 +27,6 @@ struct AlbumDetailView: View {
                 }
             }.padding(.bottom, 24)
         }.navigationTitle(album.first?.album ?? "专辑").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, isPresented: $searching, prompt: "搜索专辑中的歌曲")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(album.allSatisfy(\.isFavorite) ? "取消收藏专辑" : "收藏专辑", systemImage: album.allSatisfy(\.isFavorite) ? "star.fill" : "star") { library.setFavorite(album.map(\.id), value: !album.allSatisfy(\.isFavorite)) }
@@ -105,7 +101,6 @@ struct CollectionHero: View {
     var detail: String
     var tracks: [Track]
     var artist: String? = nil
-    var search: (() -> Void)? = nil
     @Environment(PlayerStore.self) private var player
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -122,11 +117,7 @@ struct CollectionHero: View {
                 HStack(spacing: 32) {
                     Button { if let first = tracks.randomElement() { player.play(first, in: tracks, shuffled: true) } } label: { Image(systemName: "shuffle").font(.system(size: 27)).frame(width: 55, height: 55) }.accessibilityLabel("随机播放")
                     Button { if let first = tracks.first { player.play(first, in: tracks) } } label: { Image(systemName: "play.fill").font(.system(size: 29)).frame(width: 55, height: 55) }.accessibilityLabel("播放")
-                    if let artist {
-                        NavigationLink { SongsView(title: artist, ids: tracks.map(\.id)) } label: { Image(systemName: "magnifyingglass").font(.system(size: 26)).frame(width: 55, height: 55) }.accessibilityLabel("搜索歌曲")
-                    } else if let search {
-                        Button(action: search) { Image(systemName: "magnifyingglass").font(.system(size: 26)).frame(width: 55, height: 55) }.accessibilityLabel("搜索歌曲")
-                    }
+
                 }.foregroundStyle(Color.primary).buttonStyle(PressStyle()).padding(.top, 18).disabled(tracks.isEmpty)
             }.padding(24)
         }.frame(height: min(468, max(320, UIScreen.main.bounds.height * 0.52)))

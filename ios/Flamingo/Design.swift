@@ -96,6 +96,36 @@ struct ArtworkTint: View {
     }
 }
 
+// A shared translucent body with soft, directional edge reflections.
+struct DockGlassStyle: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    func body(content: Content) -> some View {
+        content
+            .background {
+                if reduceTransparency {
+                    Capsule().fill(Color(uiColor: .secondarySystemBackground))
+                } else {
+                    Capsule().fill(.ultraThinMaterial)
+                    Capsule().fill(LinearGradient(
+                        colors: [.white.opacity(scheme == .dark ? 0.07 : 0.25), .clear, .black.opacity(0.04)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+            }
+            .clipShape(Capsule())
+            .overlay {
+                Capsule().strokeBorder(LinearGradient(
+                    stops: [.init(color: .white.opacity(0.3), location: 0),
+                            .init(color: .white.opacity(0.05), location: 0.4),
+                            .init(color: .white.opacity(0.03), location: 0.65),
+                            .init(color: .white.opacity(0.14), location: 1)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.5)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: .black.opacity(scheme == .dark ? 0.22 : 0.1), radius: 14, y: 5)
+    }
+}
+
 // Local cover light gives glass a real colored surface to sample, even on an empty library page.
 struct DockArtworkGlow: View {
     var track: Track?

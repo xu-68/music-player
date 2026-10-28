@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 import UIKit
 
 enum MusicTab: String, CaseIterable {
-    case home = "Home", library = "Library", search = "Search"
-    var symbol: String { switch self { case .home: return "house.fill"; case .library: return "square.stack.fill"; case .search: return "magnifyingglass" } }
+    case home = "Home", library = "Library"
+    var symbol: String { switch self { case .home: return "house.fill"; case .library: return "square.stack.fill" } }
 }
 
 struct RootView: View {
@@ -30,7 +30,7 @@ struct RootView: View {
     private func closePlayer() { presentation.settle(expanded: false, reduceMotion: reduceMotion) }
 
     private var floatingDock: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             if player.current != nil {
                 MiniPlayer(presentationProgress: presentation.progress, open: expandPlayer)
                     .background { GeometryReader { proxy in
@@ -38,7 +38,8 @@ struct RootView: View {
                     } }
             }
             MusicTabBar(selection: $tab)
-        }.padding(.horizontal, 20).padding(.bottom, 8)
+                .frame(maxWidth: 260)
+        }.padding(.horizontal, 12).padding(.bottom, 6)
     }
 
     var body: some View {
@@ -69,11 +70,6 @@ struct RootView: View {
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem { Label(MusicTab.library.rawValue, systemImage: MusicTab.library.symbol).accessibilityIdentifier("tab-library") }
                 .tag(MusicTab.library)
-                NavigationStack { SongsView(title: "Search") }
-                    .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: player.current == nil ? 78 : 146).allowsHitTesting(false) }
-                    .toolbar(.hidden, for: .tabBar)
-                    .tabItem { Label(MusicTab.search.rawValue, systemImage: MusicTab.search.symbol).accessibilityIdentifier("tab-search") }
-                    .tag(MusicTab.search)
             }.tint(MusicDesign.accent)
                 .overlay { Color.black.opacity(0.12 * presentation.progress).allowsHitTesting(false) }
                 .accessibilityHidden(presentation.isPresented).allowsHitTesting(!presentation.isPresented)
@@ -172,16 +168,16 @@ private struct MusicTabBar: View {
                     VStack(spacing: 2) {
                         Group {
                             if destination == .library {
-                                LibraryTabIcon().frame(width: 25, height: 28)
+                                LibraryTabIcon().frame(width: 22, height: 25)
                             } else {
                                 Image(systemName: destination.symbol)
-                                    .font(.system(size: 25, weight: destination == .search ? .regular : .semibold))
+                                    .font(.system(size: 23, weight: .semibold))
                             }
-                        }.frame(height: 28).accessibilityHidden(true)
+                        }.frame(height: 25).accessibilityHidden(true)
                         Text(destination.rawValue).font(MusicTypography.tabLabel)
                     }
-                    .frame(maxWidth: .infinity).frame(height: 54)
-                    .foregroundStyle(selection == destination ? Color.blue : Color.primary)
+                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .foregroundStyle(selection == destination ? MusicDesign.accent : Color.secondary)
                     .animation(.easeOut(duration: reduceMotion ? 0.1 : 0.16), value: selection)
                     .contentShape(Capsule())
                 }
@@ -195,20 +191,14 @@ private struct MusicTabBar: View {
                 let itemWidth = geometry.size.width / CGFloat(MusicTab.allCases.count)
                 // Keep one persistent capsule so interrupted springs retain their
                 // presentation position and velocity during rapid selection changes.
-                Capsule().fill(.primary.opacity(0.075))
+                Capsule().fill(.primary.opacity(0.06))
                     .frame(width: itemWidth, height: geometry.size.height)
                     .offset(x: CGFloat(selectedIndex) * itemWidth)
                     .animation(reduceMotion ? nil : .spring(response: 0.34, dampingFraction: 0.86), value: selection)
             }.allowsHitTesting(false).accessibilityHidden(true)
         }
-        .padding(4).background(.ultraThinMaterial)
-        .overlay {
-            Capsule().fill(LinearGradient(colors: [.white.opacity(0.16), .clear], startPoint: .top, endPoint: .bottom))
-                .allowsHitTesting(false)
-        }
-        .clipShape(Capsule())
-        .overlay { Capsule().strokeBorder(.white.opacity(0.4), lineWidth: 0.75).allowsHitTesting(false) }
-        .shadow(color: .black.opacity(0.1), radius: 16, y: 5)
+        .padding(4)
+        .modifier(DockGlassStyle())
     }
 }
 
@@ -232,8 +222,8 @@ struct MiniPlayer: View {
         HStack(spacing: 4) {
             Button(action: open) {
                 HStack(spacing: 10) {
-                    ArtworkView(track: player.current, radius: 5)
-                        .frame(width: 32, height: 32)
+                    ArtworkView(track: player.current, radius: 7)
+                        .frame(width: 38, height: 38)
                         .modifier(MiniArtworkVisibility(progress: presentationProgress, reduceMotion: reduceMotion))
                         .background { GeometryReader { proxy in
                             Color.clear.preference(key: MiniArtworkFrameKey.self, value: proxy.frame(in: .named("player-root")))
@@ -251,15 +241,11 @@ struct MiniPlayer: View {
                     .contentTransition(reduceMotion ? .identity : .symbolEffect(.replace)) }
                 .foregroundStyle(.primary).accessibilityLabel(player.isPlaying ? "暂停" : "播放").accessibilityIdentifier("mini-player-play-pause")
             Button { if player.next() { PlayerHaptics.shared.discreteSelection() } } label: {
-                Image(systemName: "forward.fill").font(.system(size: 25)).frame(width: 44, height: 44)
+                Image(systemName: "forward.fill").font(.system(size: 22)).frame(width: 44, height: 44)
             }.foregroundStyle(.primary).accessibilityLabel("下一曲").accessibilityIdentifier("mini-player-next").disabled(!player.canGoNext)
-        }.buttonStyle(PressStyle()).padding(.leading, 18).padding(.trailing, 10).frame(height: 50)
+        }.buttonStyle(PressStyle()).padding(.leading, 10).padding(.trailing, 8).frame(height: 58)
             .overlay(alignment: .bottom) { MiniPlaybackProgress(visible: presentationProgress == 0).frame(height: 2).padding(.horizontal, 20).allowsHitTesting(false) }
-            .background(.ultraThinMaterial)
-                .overlay { Capsule().fill(LinearGradient(colors: [.white.opacity(0.16), .clear], startPoint: .top, endPoint: .bottom)).allowsHitTesting(false) }
-            .clipShape(Capsule())
-            .overlay { Capsule().strokeBorder(.white.opacity(0.45), lineWidth: 0.75) }
-            .shadow(color: Color.black.opacity(0.15), radius: 10, x: 0, y: 4)
+            .modifier(DockGlassStyle())
 
     }
 }
