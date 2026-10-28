@@ -1,8 +1,12 @@
 # music-player
 
+The project owner authorizes routine source changes and necessary build fixes to be uploaded to this public repository. See [project collaboration authorization](AGENTS.md).
+
 Native iOS reconstruction of Flamingo v2.1.0 using SwiftUI, UIKit, AVFoundation and a locally compiled FFmpeg audio decoder. iOS 17+, iPhone and iPad. No Android framework or cross-platform UI runtime.
 
-Includes folder scanning, advanced LRC/TTML lyrics, local animated artwork, complete queue and sleep controls, playlist editing with duplicates/custom covers/pins, artist releases, and portable listening-statistics backups. Online artwork lookup is excluded at the user's request.
+Includes Music folder scanning, advanced LRC/TTML lyrics, local animated artwork, complete queue and sleep controls, playlist editing with duplicates/custom covers/pins, artist releases, interactive player transitions, adaptive native controls, and restrained haptic feedback. Playback history, statistics and their backups have been removed. Online artwork lookup is excluded at the user's request.
+
+Current source release: music 2.3.0 (5). See the [consolidated release notes](ios/RELEASE-2.3.0.zh-CN.md). This version's IPA build and native test results are pending; previous validation records apply only to their recorded commits.
 
 See [features and build instructions](ios/README.zh-CN.md), [source-based parity audit](ios/PARITY.md), and [actual validation results](ios/VALIDATION.zh-CN.md).
 

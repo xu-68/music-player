@@ -1,4 +1,5 @@
 import AVFoundation
+import QuartzCore
 import FlamingoCore
 import SwiftUI
 
@@ -19,10 +20,12 @@ struct AnimatedAlbumArtwork: View {
             ZStack {
                 if let image = ArtworkCache.shared.image(track?.artworkFilename) {
                     Image(uiImage: image).resizable().scaledToFill()
+                        .id(track?.artworkFilename).transition(.opacity)
                 } else {
                     ArtworkView(track: track, radius: 0)
                 }
             }.frame(width: proxy.size.width, height: proxy.size.height).clipped()
+                .animation(reduceMotion ? nil : PlayerMotion.panel, value: track?.artworkFilename)
         }
             .clipShape(RoundedRectangle(cornerRadius: fullBleed ? 0 : 16, style: .continuous))
             .overlay {
@@ -45,23 +48,44 @@ private struct LoopingVideo: UIViewRepresentable {
         var url: URL?
         let player = AVQueuePlayer()
         var looper: AVPlayerLooper?
+        var readiness: NSKeyValueObservation?
+        var playing = false
         init() { player.isMuted = true; player.allowsExternalPlayback = false; player.preventsDisplaySleepDuringVideoPlayback = false }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
     func makeUIView(context: Context) -> VideoLayerView {
         let view = VideoLayerView(); view.videoLayer.videoGravity = .resizeAspectFill
-        view.videoLayer.player = context.coordinator.player; return view
+        view.videoLayer.player = context.coordinator.player
+        view.isOpaque = false
+        view.videoLayer.opacity = 0
+        context.coordinator.readiness = view.videoLayer.observe(\.isReadyForDisplay, options: [.initial, .new]) { [weak view] layer, _ in
+            let ready = layer.isReadyForDisplay
+            DispatchQueue.main.async { [weak view] in
+                CATransaction.begin(); CATransaction.setDisableActions(true)
+                view?.videoLayer.opacity = ready ? 1 : 0
+                CATransaction.commit()
+            }
+        }
+        return view
     }
     func updateUIView(_ view: VideoLayerView, context: Context) {
         let controller = context.coordinator
-        if controller.url != url {
+        let changedURL = controller.url != url
+        if changedURL {
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            view.videoLayer.opacity = 0
+            CATransaction.commit()
             controller.player.pause(); controller.looper?.disableLooping(); controller.player.removeAllItems()
             controller.url = url
             controller.looper = AVPlayerLooper(player: controller.player, templateItem: AVPlayerItem(url: url))
         }
-        if playing { controller.player.play() } else { controller.player.pause() }
+        if changedURL || controller.playing != playing {
+            controller.playing = playing
+            if playing { controller.player.play() } else { controller.player.pause() }
+        }
     }
     static func dismantleUIView(_ view: VideoLayerView, coordinator: Coordinator) {
+        coordinator.readiness?.invalidate()
         coordinator.player.pause(); coordinator.looper?.disableLooping(); coordinator.player.removeAllItems()
         view.videoLayer.player = nil
     }

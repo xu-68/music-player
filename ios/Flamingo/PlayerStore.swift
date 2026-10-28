@@ -13,14 +13,17 @@ import Observation
     private(set) var sleepPlan: SleepPlan?
     var sleepDeadline: Date? { sleepPlan?.deadline }
     @ObservationIgnored let library: LibraryStore
-    @ObservationIgnored private let player = AVPlayer()
+    @ObservationIgnored private var player = AVPlayer()
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var statusObservation: NSKeyValueObservation?
     @ObservationIgnored private var controlObservation: NSKeyValueObservation?
+    @ObservationIgnored private var rateObservation: NSKeyValueObservation?
+    @ObservationIgnored private var cachedNowPlayingTrack: Track?
+    @ObservationIgnored private var cachedNowPlayingInfo: [String: Any] = [:]
+    @ObservationIgnored private var cachedArtworkName: String?
+    @ObservationIgnored private var cachedMediaArtwork: MPMediaItemArtwork?
+    @ObservationIgnored private var lastSystemSync: TimeInterval = 0
     @ObservationIgnored private var notifications: [NSObjectProtocol] = []
-    @ObservationIgnored private var unrecorded: Double = 0
-    @ObservationIgnored private var lastUptime = ProcessInfo.processInfo.systemUptime
-    @ObservationIgnored private var lastMediaTime: Double = 0
     @ObservationIgnored private var pendingSeek: UUID?
     @ObservationIgnored private var resumeAfterInterruption = false
     @ObservationIgnored private var wantsPlayback = false
@@ -28,14 +31,18 @@ import Observation
     @ObservationIgnored private var fadeTask: Task<Void, Never>?
     @ObservationIgnored private var sleepTask: Task<Void, Never>?
     @ObservationIgnored private var sleepFiring = false
-    @ObservationIgnored private var listeningID = UUID()
-    @ObservationIgnored private var listenedSeconds: Double = 0
-    @ObservationIgnored private var qualifiedPlay = false
-    @ObservationIgnored private var qualificationDay: Date?
-    @ObservationIgnored private var dailyListening: [Date: Double] = [:]
-    @ObservationIgnored private var dailyListeningIDs: [Date: UUID] = [:]
     @ObservationIgnored private var lastPersistedPosition: Double = 0
     var current: Track? { queue.current.flatMap { library.track($0.trackID) } }
+    // Read the media clock for visible karaoke frames, including rate changes and
+    // buffering. Never extrapolate wall time beyond the actual audio position.
+    var lyricPlaybackTime: Double {
+        // Observe elapsed even while the timeline is paused so a seek within
+        // the same lyric line redraws its word masks immediately.
+        let position = elapsed
+        guard pendingSeek == nil, player.currentItem?.status == .readyToPlay else { return position }
+        let seconds = player.currentTime().seconds
+        return seconds.isFinite ? max(0, seconds) : position
+    }
     var canGoNext: Bool {
         var candidate = queue
         return candidate.advance() && candidate.current.flatMap { library.track($0.trackID) } != nil
@@ -47,19 +54,8 @@ import Observation
 
     init(library: LibraryStore) {
         self.library = library
-        player.automaticallyWaitsToMinimizeStalling = false
-        do { try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, policy: .longFormAudio) }
-        catch { errorMessage = "无法配置音频会话：\(error.localizedDescription)" }
-        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self] _ in
-            Task { @MainActor [weak self] in self?.tick() }
-        }
-        controlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.isPlaying = self.wantsPlayback && self.player.timeControlStatus == .playing
-                self.updateNowPlaying()
-            }
-        }
+        configureAudioSession()
+        observeEngine()
         observeNotifications()
         configureRemoteCommands()
         if let data = AppPreferences.defaults.data(forKey: "playbackQueue"),
@@ -73,8 +69,50 @@ import Observation
             queue.replace(with: [id]); loadCurrent(autoplay: false)
         }
     }
+    private func configureAudioSession() {
+        do { try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, policy: .longFormAudio) }
+        catch { errorMessage = "无法配置音频会话：\(error.localizedDescription)" }
+    }
+    private func observeEngine() {
+        player.automaticallyWaitsToMinimizeStalling = false
+        let engine = player
+        timeObserver = engine.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.1, preferredTimescale: 600), queue: .main) { [weak self, weak engine] _ in
+            Task { @MainActor [weak self, weak engine] in
+                guard let self, self.player === engine else { return }
+                self.tick()
+            }
+        }
+        controlObservation = engine.observe(\.timeControlStatus, options: [.new]) { [weak self, weak engine] _, _ in
+            Task { @MainActor [weak self, weak engine] in
+                guard let self, self.player === engine else { return }
+                self.isPlaying = self.wantsPlayback && self.player.timeControlStatus == .playing
+                self.updateNowPlaying()
+            }
+        }
+        rateObservation = engine.observe(\.rate, options: [.new]) { [weak self, weak engine] _, _ in
+            Task { @MainActor [weak self, weak engine] in
+                guard let self, self.player === engine else { return }
+                self.updateNowPlaying()
+            }
+        }
+    }
+    private func recoverMediaServices() {
+        let position = elapsed
+        pause(immediate: true)
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
+        timeObserver = nil
+        controlObservation?.invalidate(); rateObservation?.invalidate(); statusObservation?.invalidate()
+        player = AVPlayer()
+        configureAudioSession()
+        observeEngine()
+        if current != nil { loadCurrent(autoplay: false); seek(to: position) }
+        // A media-services reset must never restart audio without user input.
+    }
+    func synchronizeSystemPlayback() {
+        tick()
+        updateNowPlaying()
+    }
     func play(_ track: Track, in tracks: [Track]? = nil, shuffled: Bool = false, startingAt: Int? = nil) {
-        flushListening()
         var source = tracks ?? library.tracks
         if !source.contains(where: { $0.id == track.id }) { source.append(track) }
         let index = startingAt.flatMap { source.indices.contains($0) && source[$0].id == track.id ? $0 : nil } ?? source.firstIndex(where: { $0.id == track.id }) ?? 0
@@ -84,12 +122,11 @@ import Observation
     func toggle() { wantsPlayback ? pause() : resume() }
     func resume() {
         guard current != nil else { return }
+        resumeAfterInterruption = false
         if let deadline = sleepDeadline, deadline <= Date() { cancelSleepTimer() }
         do {
             try AVAudioSession.sharedInstance().setActive(true)
-            lastUptime = ProcessInfo.processInfo.systemUptime
             if elapsed >= duration, duration > 0 { seek(to: 0) }
-            if let id = current?.id { library.markPlayed(id) }
             wantsPlayback = true
             fadeTask?.cancel()
             player.volume = AppPreferences.defaults.bool(forKey: "fadePlayback") ? 0 : 1
@@ -98,13 +135,14 @@ import Observation
         } catch { errorMessage = "无法开始播放：\(error.localizedDescription)" }
     }
     func pause(immediate: Bool = false) {
+        resumeAfterInterruption = false
         wantsPlayback = false; isPlaying = false
         let duration = !immediate && AppPreferences.defaults.bool(forKey: "fadePlayback") ? 0.2 : 0
         fade(to: 0, seconds: duration) { [weak self] in
             guard let self else { return }
-            self.player.pause(); self.player.volume = 1; self.flushListening(); self.updateNowPlaying()
+            self.player.pause(); self.player.volume = 1; self.updateNowPlaying()
         }
-        flushListening(); persistQueue(); updateNowPlaying()
+        persistQueue(); updateNowPlaying()
     }
     @discardableResult func next(automatic: Bool = false) -> Bool {
         if automatic, sleepPlan?.mode == .endOfTrack || automatic && sleepPlan?.mode == .endOfQueue && queue.upcoming.isEmpty {
@@ -112,13 +150,11 @@ import Observation
         }
         // An unavailable manual skip must not pause the current song.
         guard automatic || canGoNext else { return false }
-        flushListening()
         if queue.advance(automatic: automatic) { loadCurrent(autoplay: true); return true }
         pause(); return false
     }
     @discardableResult func previous() -> Bool {
         guard canGoPrevious else { return false }
-        flushListening()
         if queue.previous() { loadCurrent(autoplay: true); return true }
         return false
     }
@@ -127,18 +163,19 @@ import Observation
         elapsed = min(max(0, value), max(duration, 0))
         let token = UUID()
         pendingSeek = token
-        player.seek(to: CMTime(seconds: elapsed, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+        player.seek(to: CMTime(seconds: elapsed, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self, self.pendingSeek == token else { return }
                 self.pendingSeek = nil
-                let seconds = self.player.currentTime().seconds
-                self.lastMediaTime = seconds.isFinite ? seconds : 0
-                self.lastUptime = ProcessInfo.processInfo.systemUptime
+                if finished {
+                    let actual = self.player.currentTime().seconds
+                    if actual.isFinite { self.elapsed = max(0, actual) }
+                }
+                self.persistQueue()
                 self.updateNowPlaying()
             }
         }
-        lastUptime = ProcessInfo.processInfo.systemUptime
-        updateNowPlaying()
+        persistQueue(); updateNowPlaying()
     }
     func toggleShuffle() { queue.toggleShuffle(); persistQueue() }
     func cycleRepeat() { queue.repeatMode = queue.repeatMode.next; persistQueue() }
@@ -156,10 +193,9 @@ import Observation
     func moveQueueEntryNext(_ id: UUID) { queue.moveNext(id); persistQueue() }
     func clearUpcoming() { queue.clearUpcoming(); persistQueue() }
     func clearNextInQueue() { queue.clearNextInQueue(); persistQueue() }
-    func selectQueueEntry(_ id: UUID) { flushListening(); queue.select(id); loadCurrent(autoplay: true) }
+    func selectQueueEntry(_ id: UUID) { queue.select(id); loadCurrent(autoplay: true) }
     func refreshLyrics() { lines = current.map { library.lyrics(for: $0) } ?? [] }
     func removeFromLibrary(_ id: UUID) {
-        flushListening()
         let wasCurrent = queue.current?.trackID == id
         guard library.deleteTrack(id) else { return }
         if wasCurrent {
@@ -185,23 +221,6 @@ import Observation
             else { lines = []; elapsed = 0; duration = 0; pendingSeek = nil; MPNowPlayingInfoCenter.default().nowPlayingInfo = nil }
         }
         if !missing.isEmpty { persistQueue() }
-    }
-    func flushListening() {
-        listenedSeconds += unrecorded
-        if let id = current?.id, qualifiedPlay {
-            for (day, seconds) in dailyListening {
-                let token = dailyListeningIDs[day] ?? UUID(); dailyListeningIDs[day] = token
-                library.recordListening(id, sessionID: token, seconds: seconds, qualified: qualificationDay == day, day: day)
-            }
-        }
-        unrecorded = 0
-    }
-    func clearStatistics() {
-        library.clearStatistics(); resetListening()
-    }
-    private func resetListening() {
-        listeningID = UUID(); listenedSeconds = 0; unrecorded = 0; qualifiedPlay = false
-        qualificationDay = nil; dailyListening = [:]; dailyListeningIDs = [:]
     }
     func setSleepTimer(minutes: Int?) {
         if let minutes { setSleepTimer(mode: .duration, minutes: Double(minutes)) } else { cancelSleepTimer() }
@@ -264,9 +283,7 @@ import Observation
         let item = AVPlayerItem(url: url)
         statusObservation?.invalidate()
         player.replaceCurrentItem(with: item)
-        elapsed = 0; duration = track.duration; isPlaying = false; lastMediaTime = 0; pendingSeek = nil
-        lastUptime = ProcessInfo.processInfo.systemUptime
-        resetListening()
+        elapsed = 0; duration = track.duration; isPlaying = false; pendingSeek = nil
         persistQueue()
         refreshLyrics()
         AppPreferences.defaults.set(track.id.uuidString, forKey: "lastTrack")
@@ -282,48 +299,47 @@ import Observation
         if autoplay { resume() }
     }
     private func tick() {
-        let uptime = ProcessInfo.processInfo.systemUptime
-        let delta = uptime - lastUptime
-        lastUptime = uptime
         let seconds = player.currentTime().seconds
-        let mediaDelta = seconds.isFinite ? seconds - lastMediaTime : 0
         if seconds.isFinite {
             if pendingSeek == nil { elapsed = seconds }
-            lastMediaTime = seconds
         }
         if let value = player.currentItem?.duration.seconds, value.isFinite, value > 0 { duration = value }
-        if player.timeControlStatus == .playing, pendingSeek == nil {
-            if AppPreferences.defaults.bool(forKey: "listeningHistory") {
-                let actual = min(max(mediaDelta, 0), max(delta, 0) + 0.25)
-                unrecorded += actual
-                let day = Calendar.current.startOfDay(for: Date())
-                dailyListening[day, default: 0] += actual
-                if !qualifiedPlay, duration > 0, elapsed / duration >= 0.5 { qualifiedPlay = true; qualificationDay = day }
-            }
-            if unrecorded >= 10 { flushListening() }
-        }
         if abs(elapsed - lastPersistedPosition) >= 5 { lastPersistedPosition = elapsed; persistQueue() }
+        if ProcessInfo.processInfo.systemUptime - lastSystemSync >= 5 { updateNowPlaying() }
     }
     private func updateNowPlaying() {
+        let center = MPNowPlayingInfoCenter.default()
         guard let track = current else {
-            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            cachedNowPlayingTrack = nil; cachedNowPlayingInfo = [:]
+            cachedMediaArtwork = nil; cachedArtworkName = nil
+            center.nowPlayingInfo = nil
             updateRemoteCommandAvailability()
             return
         }
-        var info: [String: Any] = [MPMediaItemPropertyTitle: track.title,
-                                  MPMediaItemPropertyArtist: track.artist,
-                                  MPMediaItemPropertyAlbumTitle: track.album,
-                                  MPMediaItemPropertyPlaybackDuration: duration,
-                                  MPNowPlayingInfoPropertyElapsedPlaybackTime: elapsed,
-                                  MPNowPlayingInfoPropertyPlaybackRate: player.rate,
-                                  MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
-                                  MPNowPlayingInfoPropertyPlaybackQueueIndex: queue.index,
-                                  MPNowPlayingInfoPropertyPlaybackQueueCount: queue.entries.count,
-                                  MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0]
-        if let image = ArtworkCache.shared.image(track.artworkFilename) {
-            info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+        if cachedNowPlayingTrack != track {
+            cachedNowPlayingTrack = track
+            cachedNowPlayingInfo = [MPMediaItemPropertyTitle: track.title,
+                                    MPMediaItemPropertyArtist: track.artist,
+                                    MPMediaItemPropertyAlbumTitle: track.album,
+                                    MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+                                    MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0]
+            if cachedArtworkName != track.artworkFilename {
+                cachedArtworkName = track.artworkFilename
+                cachedMediaArtwork = ArtworkCache.shared.image(track.artworkFilename).map { image in
+                    MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+                }
+            }
+            cachedNowPlayingInfo[MPMediaItemPropertyArtwork] = cachedMediaArtwork
         }
-        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        // iOS advances elapsed time using this rate; periodic correction is
+        // throttled and never recreates static metadata or the artwork object.
+        cachedNowPlayingInfo[MPMediaItemPropertyPlaybackDuration] = duration
+        cachedNowPlayingInfo[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
+        cachedNowPlayingInfo[MPNowPlayingInfoPropertyPlaybackRate] = wantsPlayback && isPlaying ? player.rate : 0
+        cachedNowPlayingInfo[MPNowPlayingInfoPropertyPlaybackQueueIndex] = queue.index
+        cachedNowPlayingInfo[MPNowPlayingInfoPropertyPlaybackQueueCount] = queue.entries.count
+        center.nowPlayingInfo = cachedNowPlayingInfo
+        lastSystemSync = ProcessInfo.processInfo.systemUptime
         updateRemoteCommandAvailability()
     }
     private func observeNotifications() {
@@ -341,7 +357,9 @@ import Observation
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 if type == AVAudioSession.InterruptionType.began.rawValue {
-                    self.resumeAfterInterruption = self.wantsPlayback; self.pause(immediate: true)
+                    let requestedResume = self.wantsPlayback
+                    self.pause(immediate: true)
+                    self.resumeAfterInterruption = requestedResume
                 } else if type == AVAudioSession.InterruptionType.ended.rawValue {
                     let shouldResume = self.resumeAfterInterruption && AVAudioSession.InterruptionOptions(rawValue: options).contains(.shouldResume)
                     self.resumeAfterInterruption = false
@@ -353,10 +371,16 @@ import Observation
             let reason = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt
             if reason == AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue {
                 Task { @MainActor [weak self] in self?.pause(immediate: true) }
+            } else {
+                Task { @MainActor [weak self] in self?.synchronizeSystemPlayback() }
             }
+        })
+        notifications.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.recoverMediaServices() }
         })
     }
     private func configureRemoteCommands() {
+        guard remoteTargets.isEmpty else { return }
         let commands = MPRemoteCommandCenter.shared()
         func bind(_ command: MPRemoteCommand, _ action: @escaping @MainActor () -> MPRemoteCommandHandlerStatus) {
             let target = command.addTarget { _ in
@@ -410,6 +434,8 @@ import Observation
         commands.previousTrackCommand.isEnabled = canGoPrevious
     }
     deinit {
+        fadeTask?.cancel(); sleepTask?.cancel()
+        statusObservation?.invalidate(); controlObservation?.invalidate(); rateObservation?.invalidate()
         for (command, target) in remoteTargets { command.removeTarget(target) }
         for observer in notifications { NotificationCenter.default.removeObserver(observer) }
         if let timeObserver { player.removeTimeObserver(timeObserver) }

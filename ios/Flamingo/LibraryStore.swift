@@ -261,6 +261,9 @@ actor AudioImporter {
                 snapshot = try JSONDecoder().decode(LibrarySnapshot.self, from: Data(contentsOf: LibraryPaths.database))
                 guard snapshot.version == 1 else { throw CocoaError(.coderReadCorrupt) }
                 snapshot.folders = []; snapshot.hiddenDirectories = []
+                // Rewrite the supported schema so retired history/statistics
+                // fields are removed even when automatic scanning is disabled.
+                scheduleSave()
             }
         } catch {
             ready = false
@@ -332,7 +335,7 @@ actor AudioImporter {
                 if let existing = snapshot.tracks.first(where: { $0.filename == track.filename }) {
                     if managed, let i = snapshot.tracks.firstIndex(where: { $0.id == existing.id }) {
                         track.id = existing.id; track.addedAt = existing.addedAt
-                        track.isFavorite = existing.isFavorite; track.lastPlayedAt = existing.lastPlayedAt
+                        track.isFavorite = existing.isFavorite
                         track.lyricsFilename = existing.lyricsFilename; track.manualLyrics = existing.manualLyrics
                         track.videoFilename = existing.videoFilename
                         if track.artworkFilename == nil { track.artworkFilename = existing.artworkFilename }
@@ -443,40 +446,6 @@ actor AudioImporter {
         for i in snapshot.tracks.indices where selected.contains(snapshot.tracks[i].id) { snapshot.tracks[i].isFavorite = value }
         scheduleSave()
     }
-    func markPlayed(_ id: UUID) {
-        guard ready, AppPreferences.defaults.bool(forKey: "listeningHistory"), let i = snapshot.tracks.firstIndex(where: { $0.id == id }) else { return }
-        snapshot.tracks[i].lastPlayedAt = Date(); scheduleSave()
-        let recent = tracks.filter { $0.lastPlayedAt != nil }.sorted { $0.lastPlayedAt! > $1.lastPlayedAt! }
-        let old = Set(recent.dropFirst(50).map(\.id))
-        for i in snapshot.tracks.indices where old.contains(snapshot.tracks[i].id) { snapshot.tracks[i].lastPlayedAt = nil }
-    }
-    func recordListening(_ id: UUID, sessionID: UUID, seconds: Double, qualified: Bool, day: Date) {
-        guard ready, AppPreferences.defaults.bool(forKey: "listeningHistory"), seconds > 0, seconds.isFinite, let track = track(id) else { return }
-        if let i = snapshot.sessions.firstIndex(where: { $0.id == sessionID }) {
-            snapshot.sessions[i].seconds = seconds
-            snapshot.sessions[i].countsAsPlay = qualified
-        } else {
-            var session = ListeningSession(trackID: id, seconds: seconds)
-            session.id = sessionID; session.title = track.title; session.artist = track.artist; session.album = track.album
-            session.dayStart = day
-            session.countsAsPlay = qualified
-            snapshot.sessions.append(session)
-        }
-        scheduleSave()
-    }
-    func importStatistics(_ url: URL, merge: Bool) throws {
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        snapshot.sessions = try ListeningBackup.restore(Data(contentsOf: url), into: snapshot.sessions, tracks: tracks, merge: merge)
-        scheduleSave()
-    }
-    func exportStatistics() throws -> URL {
-        let target = LibraryPaths.root.appending(path: "Flamingo-Statistics.json")
-        try ListeningBackup.export(snapshot.sessions, tracks: tracks).write(to: target, options: .atomic)
-        return target
-    }
-    func clearStatistics() { snapshot.sessions = []; scheduleSave() }
-    func clearHistory() { for i in snapshot.tracks.indices { snapshot.tracks[i].lastPlayedAt = nil }; scheduleSave() }
     func createPlaylist(_ name: String, tracks: [UUID] = []) {
         guard ready, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         snapshot.playlists.append(.init(name: name.trimmingCharacters(in: .whitespacesAndNewlines), trackIDs: tracks)); scheduleSave()
@@ -523,7 +492,6 @@ actor AudioImporter {
         }
         snapshot.tracks.removeAll { $0.id == id }
         for i in snapshot.playlists.indices { snapshot.playlists[i].trackIDs.removeAll { $0 == id } }
-        // History is retained so listening totals do not change when files are removed.
         if let name = track.artworkFilename, !snapshot.tracks.contains(where: { $0.artworkFilename == name }) {
             try? FileManager.default.removeItem(at: LibraryPaths.artwork.appending(path: name))
         }

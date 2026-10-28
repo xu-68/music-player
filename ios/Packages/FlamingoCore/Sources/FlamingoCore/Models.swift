@@ -16,7 +16,6 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
     public var discNumber: Int
     public var addedAt: Date
     public var isFavorite: Bool
-    public var lastPlayedAt: Date?
     public var originalFilename: String?
     public var modifiedAt: Date?
     public var sourceByteCount: Int?
@@ -39,13 +38,13 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
                 artworkFilename: String? = nil, lyricsFilename: String? = nil,
                 embeddedLyrics: String? = nil, duration: Double = 0,
                 trackNumber: Int = 0, discNumber: Int = 0, addedAt: Date = Date(),
-                isFavorite: Bool = false, lastPlayedAt: Date? = nil) {
+                isFavorite: Bool = false) {
         self.id = id; self.title = title; self.artist = artist; self.album = album
         self.albumArtist = albumArtist; self.filename = filename
         self.artworkFilename = artworkFilename; self.lyricsFilename = lyricsFilename
         self.embeddedLyrics = embeddedLyrics; self.duration = duration
         self.trackNumber = trackNumber; self.discNumber = discNumber
-        self.addedAt = addedAt; self.isFavorite = isFavorite; self.lastPlayedAt = lastPlayedAt
+        self.addedAt = addedAt; self.isFavorite = isFavorite
     }
 
     public var albumKey: String { "\(albumArtist.isEmpty ? artist : albumArtist)\u{1f}\(album)" }
@@ -70,39 +69,20 @@ public struct Playlist: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
-public struct ListeningSession: Codable, Identifiable, Sendable {
-    public var id: UUID
-    public var trackID: UUID
-    public var date: Date
-    public var seconds: Double
-    public var title: String?
-    public var artist: String?
-    public var album: String?
-    public var originalURI: String?
-    public var countsAsPlay: Bool?
-    public var dayStart: Date?
-    public var isImported: Bool?
-    public init(trackID: UUID, date: Date = Date(), seconds: Double) {
-        self.id = UUID(); self.trackID = trackID; self.date = date; self.seconds = seconds
-    }
-}
-
 public struct LibrarySnapshot: Codable, Sendable {
     public var version: Int = 1
     public var tracks: [Track] = []
     public var playlists: [Playlist] = []
-    public var sessions: [ListeningSession] = []
     public var followedArtists: [String] = []
     public var folders: [MusicFolder] = []
     public var hiddenDirectories: [String] = []
     public init() {}
-    enum CodingKeys: String, CodingKey { case version, tracks, playlists, sessions, followedArtists, folders, hiddenDirectories }
+    enum CodingKeys: String, CodingKey { case version, tracks, playlists, followedArtists, folders, hiddenDirectories }
     public init(from decoder: Decoder) throws {
         let box = try decoder.container(keyedBy: CodingKeys.self)
         version = try box.decodeIfPresent(Int.self, forKey: .version) ?? 1
         tracks = try box.decodeIfPresent([Track].self, forKey: .tracks) ?? []
         playlists = try box.decodeIfPresent([Playlist].self, forKey: .playlists) ?? []
-        sessions = try box.decodeIfPresent([ListeningSession].self, forKey: .sessions) ?? []
         followedArtists = try box.decodeIfPresent([String].self, forKey: .followedArtists) ?? []
         folders = try box.decodeIfPresent([MusicFolder].self, forKey: .folders) ?? []
         hiddenDirectories = try box.decodeIfPresent([String].self, forKey: .hiddenDirectories) ?? []

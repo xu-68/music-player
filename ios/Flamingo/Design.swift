@@ -6,8 +6,26 @@ import SwiftUI
 enum MusicDesign {
     static let accent = Color(red: 0.96, green: 0.22, blue: 0.36)
     static let spring = Animation.spring(response: 0.46, dampingFraction: 0.86)
-    static let lyricSpring = Animation.spring(response: 0.55, dampingFraction: 0.9)
+    static let lyricSpring = Animation.spring(response: 0.44, dampingFraction: 0.94)
     static let pageInset: CGFloat = 20
+}
+
+enum MusicTypography {
+    static let largeTitle = Font.largeTitle.bold()
+    static let title = Font.title2.bold()
+    static let headline = Font.headline
+    static let body = Font.body
+    static let subheadline = Font.subheadline
+    static let caption = Font.caption
+    static let compactHeadline = Font.subheadline.weight(.semibold)
+    static let tabLabel = Font.caption2.weight(.medium)
+    static let lyricBaseSize: CGFloat = 32
+    static let lyricBaseSpacing: CGFloat = 5
+    static let lyricParagraphSpacing: CGFloat = 24
+
+    static func lyric(size: CGFloat) -> Font {
+        .system(size: size, weight: .bold, design: .default)
+    }
 }
 
 struct PressStyle: ButtonStyle {
@@ -15,7 +33,29 @@ struct PressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label.opacity(configuration.isPressed ? 0.65 : 1)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.96 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .animation(reduceMotion ? PlayerMotion.reduced : PlayerMotion.control, value: configuration.isPressed)
+    }
+}
+
+// A stacked library with a cut-out note, independent of SF Symbols versions.
+struct LibraryTabIcon: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            VStack(spacing: height * 0.07) {
+                Capsule().frame(width: width * 0.52, height: height * 0.075)
+                Capsule().frame(width: width * 0.78, height: height * 0.075)
+                RoundedRectangle(cornerRadius: width * 0.15)
+                    .mask {
+                        Rectangle().overlay {
+                            Image(systemName: "music.note")
+                                .font(.system(size: height * 0.5, weight: .bold))
+                                .blendMode(.destinationOut)
+                        }.compositingGroup()
+                    }
+            }
+        }.accessibilityHidden(true)
     }
 }
 
@@ -28,11 +68,13 @@ struct ArtworkView: View {
                 Color(uiColor: .secondarySystemBackground)
                 if let image = ArtworkCache.shared.image(track?.artworkFilename) {
                     Image(uiImage: image).resizable().scaledToFill()
+                        .id(track?.artworkFilename).transition(.opacity)
                 } else {
                     Image(systemName: "music.note").font(.system(size: max(18, proxy.size.width * 0.3), weight: .medium))
                         .foregroundStyle(MusicDesign.accent.opacity(0.7))
                 }
             }.frame(width: proxy.size.width, height: proxy.size.height)
+                .animation(.easeOut(duration: 0.2), value: track?.artworkFilename)
                 .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
         }.aspectRatio(1, contentMode: .fit).accessibilityHidden(true)
     }
@@ -124,7 +166,8 @@ struct FlowingArtworkBackground: View {
                 lastTick = now
             }
         }.task(id: track?.artworkFilename) {
-            colors = ArtworkPalette.colors(from: ArtworkCache.shared.image(track?.artworkFilename))
+            let palette = ArtworkPalette.colors(from: ArtworkCache.shared.image(track?.artworkFilename))
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.6)) { colors = palette }
         }.ignoresSafeArea().allowsHitTesting(false).accessibilityHidden(true)
     }
 }
@@ -200,28 +243,6 @@ struct AirPlayButton: UIViewRepresentable {
     }
 }
 
-struct SystemVolumeSlider: UIViewRepresentable {
-    func makeUIView(context: Context) -> MPVolumeView {
-        let view = MPVolumeView()
-        view.showsRouteButton = false
-        view.tintColor = .white.withAlphaComponent(0.75)
-        // The reference has a continuous capsule track with no visible thumb.
-        let thumb = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
-        view.setVolumeThumbImage(thumb, for: .normal)
-        func track(_ color: UIColor) -> UIImage {
-            UIGraphicsImageRenderer(size: CGSize(width: 12, height: 6)).image { _ in
-                color.setFill()
-                UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 12, height: 6), cornerRadius: 3).fill()
-            }.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: 3, bottom: 0, right: 3))
-        }
-        view.setMinimumVolumeSliderImage(track(.white.withAlphaComponent(0.8)), for: .normal)
-        view.setMaximumVolumeSliderImage(track(.white.withAlphaComponent(0.22)), for: .normal)
-        view.accessibilityLabel = "系统音量"
-        return view
-    }
-    func updateUIView(_ view: MPVolumeView, context: Context) {}
-}
-
 struct MusicEmptyState: View {
     var title: String
     var message: String
@@ -252,17 +273,15 @@ struct TrackRow: View {
                 if showArtwork { ArtworkView(track: track, radius: 5).frame(width: 48, height: 48) }
                 else if let number { Text("\(number)").font(.subheadline).foregroundStyle(.secondary).frame(width: 24) }
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(track.title).font(.body).foregroundStyle(player.current?.id == track.id ? MusicDesign.accent : .primary).lineLimit(1)
-                    if showArtwork || subtitle != nil { Text(subtitle ?? track.artist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1) }
+                    Text(track.title).font(MusicTypography.headline).foregroundStyle(player.current?.id == track.id ? MusicDesign.accent : .primary).lineLimit(1)
+                    if showArtwork || subtitle != nil { Text(subtitle ?? track.artist).font(MusicTypography.subheadline).foregroundStyle(.secondary).lineLimit(1) }
                 }
                 Spacer(minLength: 4)
                 if track.isFavorite { Image(systemName: "star.fill").font(.caption2).foregroundStyle(MusicDesign.accent) }
-                if player.current?.id == track.id {
-                    Image(systemName: player.isPlaying ? "waveform" : "pause.fill").font(.caption).foregroundStyle(MusicDesign.accent)
-                }
             }.frame(minHeight: showArtwork ? 54 : 44).contentShape(Rectangle())
         }.buttonStyle(PressStyle())
             .accessibilityLabel("\(track.title)，\(track.artist)")
+            .accessibilityValue(player.current?.id == track.id ? "当前歌曲" : "")
     }
 }
 

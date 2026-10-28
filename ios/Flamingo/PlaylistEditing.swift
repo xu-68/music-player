@@ -112,7 +112,7 @@ struct PlaylistEditor: View {
                                 HStack(spacing: 12) {
                                     Image(systemName: removed.contains(entry.id) ? "checkmark.circle.fill" : "circle").foregroundStyle(MusicDesign.accent)
                                     ArtworkView(track: track).frame(width: 42, height: 42)
-                                    VStack(alignment: .leading) { Text(track.title).foregroundStyle(Color.primary); Text(track.artist).font(.caption).foregroundStyle(.secondary) }
+                                    VStack(alignment: .leading) { Text(track.title).foregroundStyle(Color.primary); Text(track.artist).font(MusicTypography.caption).foregroundStyle(.secondary) }
                                 }.opacity(removed.contains(entry.id) ? 0.45 : 1)
                             }
                         }
@@ -168,7 +168,7 @@ private struct PlaylistSongPicker: View {
                 Button { add(track.id); added[track.id, default: 0] += 1 } label: {
                     HStack(spacing: 12) {
                         ArtworkView(track: track).frame(width: 42, height: 42)
-                        VStack(alignment: .leading) { Text(track.title).foregroundStyle(Color.primary); Text(track.artist).font(.caption).foregroundStyle(.secondary) }
+                        VStack(alignment: .leading) { Text(track.title).foregroundStyle(Color.primary); Text(track.artist).font(MusicTypography.caption).foregroundStyle(.secondary) }
                         Spacer()
                         if let count = added[track.id] { Text("+\(count)").font(.caption.monospacedDigit()) }
                         Image(systemName: "plus.circle.fill")

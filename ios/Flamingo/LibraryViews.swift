@@ -7,7 +7,6 @@ struct HomeView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
     @State private var recommendationIDs: [UUID] = []
-    private var recent: [Track] { library.tracks.filter { $0.lastPlayedAt != nil }.sorted { $0.lastPlayedAt! > $1.lastPlayedAt! } }
     private var suggestions: [Track] {
         recommendationIDs.compactMap(library.track)
     }
@@ -21,9 +20,6 @@ struct HomeView: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
                             shelf(title: "为你精选", tracks: suggestions, width: min(proxy.size.width * 0.72, 320), featured: true)
-                            if !recent.isEmpty {
-                                recentShelf(width: min(proxy.size.width * 0.72, 320))
-                            }
                         }.padding(.vertical, 12)
                     }
                 }
@@ -39,7 +35,7 @@ struct HomeView: View {
     }
     private func shelf(title: String, tracks: [Track], width: CGFloat, featured: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title).font(.title2.bold()).padding(.horizontal, MusicDesign.pageInset)
+            Text(title).font(MusicTypography.title).padding(.horizontal, MusicDesign.pageInset)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: featured ? 12 : 16) {
                     ForEach(tracks) { track in
@@ -48,8 +44,8 @@ struct HomeView: View {
                                 ArtworkView(track: track, radius: featured ? 0 : 8).frame(width: width, height: width)
                                 VStack(alignment: featured ? .center : .leading, spacing: 3) {
                                     Text(track.title).font(featured ? .headline : .body).lineLimit(1).foregroundStyle(featured ? Color.white : Color.primary)
-                                    Text(track.artist).font(.subheadline).lineLimit(1).foregroundStyle(featured ? Color.white.opacity(0.6) : Color.secondary)
-                                    if featured { Text(track.album).font(.subheadline).lineLimit(1).foregroundStyle(.white.opacity(0.6)) }
+                                    Text(track.artist).font(MusicTypography.subheadline).lineLimit(1).foregroundStyle(featured ? Color.white.opacity(0.6) : Color.secondary)
+                                    if featured { Text(track.album).font(MusicTypography.subheadline).lineLimit(1).foregroundStyle(.white.opacity(0.6)) }
                                 }.frame(maxWidth: .infinity, alignment: featured ? .center : .leading)
                                     .padding(featured ? 14 : 0)
                                     .background {
@@ -60,33 +56,6 @@ struct HomeView: View {
                         }.buttonStyle(PressStyle()).contextMenu { TrackActions(track: track) }
                     }
                 }.scrollTargetLayout().padding(.horizontal, MusicDesign.pageInset)
-            }.scrollTargetBehavior(.viewAligned)
-        }
-    }
-    private func recentShelf(width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("最近播放").font(.title2.bold()).padding(.horizontal, 20)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(RecentMusic.group(recent)) { group in
-                        if let track = group.tracks.first {
-                            Button {
-                                let tracks = group.isAlbum ? library.albums.first { $0.first?.albumKey == track.albumKey } ?? group.tracks : recent
-                                player.play(group.isAlbum ? tracks.first ?? track : track, in: tracks)
-                            } label: {
-                                VStack(spacing: 0) {
-                                    ArtworkView(track: track, radius: 0).frame(width: width, height: width)
-                                    VStack(spacing: 3) {
-                                        Text(group.isAlbum ? track.album : track.title).font(.headline).foregroundStyle(.white).lineLimit(1)
-                                        Text(track.artist).font(.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                                        Text(group.isAlbum ? "\(group.tracks.count) 首歌曲" : track.album).font(.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                                    }.frame(maxWidth: .infinity).padding(14)
-                                        .background { ArtworkTint(track: track) }
-                                }.frame(width: width).clipShape(RoundedRectangle(cornerRadius: 14))
-                            }.buttonStyle(PressStyle())
-                        }
-                    }
-                }.scrollTargetLayout().padding(.horizontal, 20)
             }.scrollTargetBehavior(.viewAligned)
         }
     }
@@ -119,9 +88,9 @@ private struct LibraryCategory: View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 Image(systemName: symbol).font(.system(size: 24, weight: .regular)).foregroundStyle(MusicDesign.accent).frame(width: 30)
-                Text(title).font(.system(size: 22)).foregroundStyle(.primary)
+                Text(title).font(MusicTypography.title).foregroundStyle(.primary)
                 Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 14, weight: .semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.right").font(MusicTypography.compactHeadline).foregroundStyle(.tertiary)
             }.frame(minHeight: 58).contentShape(Rectangle())
             Divider().padding(.leading, 44)
         }
@@ -137,8 +106,8 @@ struct AlbumGrid: View {
                     NavigationLink { AlbumDetailView(albumKey: track.albumKey) } label: {
                         VStack(alignment: .leading, spacing: 5) {
                             ArtworkView(track: track).shadow(color: .black.opacity(0.08), radius: 5, y: 2).padding(.bottom, 2)
-                            Text(track.album).font(.body).foregroundStyle(.primary).lineLimit(1)
-                            Text(track.albumArtist.isEmpty ? track.artist : track.albumArtist).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                            Text(track.album).font(MusicTypography.body).foregroundStyle(.primary).lineLimit(1)
+                            Text(track.albumArtist.isEmpty ? track.artist : track.albumArtist).font(MusicTypography.subheadline).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }.buttonStyle(PressStyle())
                 }
@@ -170,7 +139,7 @@ struct CollectionPlayButtons: View {
             Button { if let first = tracks.randomElement() { player.play(first, in: tracks, shuffled: true) } } label: {
                 Label("随机播放", systemImage: "shuffle").frame(maxWidth: .infinity).frame(height: 46)
             }
-        }.font(.headline).buttonStyle(PressStyle())
+        }.font(MusicTypography.headline).buttonStyle(PressStyle())
             .background { HStack(spacing: 14) { RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemBackground)); RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemBackground)) } }
             .disabled(tracks.isEmpty)
     }
@@ -227,7 +196,7 @@ struct ArtistsView: View {
                 HStack(spacing: 14) {
                     ArtworkView(track: tracks.first, radius: 100).frame(width: 54, height: 54)
                     Text(artist).font(.title3)
-                    if library.snapshot.followedArtists.contains(artist) { Image(systemName: "star.fill").font(.caption).foregroundStyle(MusicDesign.accent) }
+                    if library.snapshot.followedArtists.contains(artist) { Image(systemName: "star.fill").font(MusicTypography.caption).foregroundStyle(MusicDesign.accent) }
                 }.padding(.vertical, 4)
             }
         }.listStyle(.plain).navigationTitle("艺人").searchable(text: $query, prompt: "搜索艺人")
@@ -257,8 +226,8 @@ struct PlaylistsView: View {
                 NavigationLink { PlaylistDetailView(id: playlist.id) } label: {
                     HStack(spacing: 12) {
                         PlaylistArtwork(tracks: library.tracks(for: playlist), custom: playlist.artworkFilename).frame(width: 62, height: 62)
-                        VStack(alignment: .leading, spacing: 4) { Text(playlist.name).font(.headline); Text("\(playlist.trackIDs.count) 首歌曲").font(.subheadline).foregroundStyle(.secondary) }
-                        if playlist.isPinned == true { Spacer(); Image(systemName: "pin.fill").font(.caption).foregroundStyle(MusicDesign.accent) }
+                        VStack(alignment: .leading, spacing: 4) { Text(playlist.name).font(MusicTypography.headline); Text("\(playlist.trackIDs.count) 首歌曲").font(MusicTypography.subheadline).foregroundStyle(.secondary) }
+                        if playlist.isPinned == true { Spacer(); Image(systemName: "pin.fill").font(MusicTypography.caption).foregroundStyle(MusicDesign.accent) }
                     }.padding(.vertical, 5)
                 }.contextMenu {
                     Button(playlist.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") { library.togglePin(playlist.id) }
@@ -280,7 +249,7 @@ struct PlaylistsView: View {
             .safeAreaInset(edge: .bottom) {
                 if let value = deleted {
                     HStack { Text("已删除“\(value.name)”").lineLimit(1); Spacer(); Button("撤销") { library.restorePlaylist(value); deleted = nil }; Button("完成") { deleted = nil } }
-                        .font(.subheadline).padding().background(.regularMaterial)
+                        .font(MusicTypography.subheadline).padding().background(.regularMaterial)
                 }
             }
             .sheet(isPresented: $creating) { PlaylistEditor() }
@@ -323,7 +292,7 @@ struct PlaylistDetailView: View {
         List {
             if let playlist {
                 PlaylistArtwork(tracks: library.tracks(for: playlist), custom: playlist.artworkFilename).frame(width: 230, height: 230).frame(maxWidth: .infinity).listRowSeparator(.hidden)
-                if let description = playlist.description, !description.isEmpty { Text(description).font(.subheadline).foregroundStyle(.secondary).listRowSeparator(.hidden) }
+                if let description = playlist.description, !description.isEmpty { Text(description).font(MusicTypography.subheadline).foregroundStyle(.secondary).listRowSeparator(.hidden) }
             }
             CollectionPlayButtons(tracks: tracks).listRowSeparator(.hidden)
             ForEach(Array(occurrences.enumerated()), id: \.element.id) { index, occurrence in

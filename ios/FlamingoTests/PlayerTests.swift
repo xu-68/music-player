@@ -1,3 +1,4 @@
+import AVFoundation
 import FlamingoCore
 import MediaPlayer
 import XCTest
@@ -9,12 +10,12 @@ import XCTest
     private var track: Track!
     private var folder: URL!
     private var preferences: [String: Any] = [:]
-    private let keys = ["excludeShort", "fadePlayback", "sleepFade", "listeningHistory", "playbackQueue", "playbackPosition", "lastTrack"]
+    private let keys = ["excludeShort", "fadePlayback", "sleepFade", "playbackQueue", "playbackPosition", "lastTrack"]
     override func setUp() async throws {
         let defaults = AppPreferences.defaults
         for key in keys { preferences[key] = defaults.object(forKey: key) }
         defaults.set(false, forKey: "excludeShort"); defaults.set(false, forKey: "fadePlayback")
-        defaults.set(0.0, forKey: "sleepFade"); defaults.set(true, forKey: "listeningHistory")
+        defaults.set(0.0, forKey: "sleepFade")
         defaults.removeObject(forKey: "playbackQueue"); defaults.removeObject(forKey: "lastTrack")
         folder = URL.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -46,7 +47,6 @@ import XCTest
         player.play(track, in: [track, track])
         let stopped = await until { self.player.sleepPlan == nil && !self.player.isPlaying }
         XCTAssertTrue(stopped); XCTAssertEqual(player.queue.index, 0); XCTAssertEqual(player.queue.upcoming.count, 1)
-        XCTAssertFalse(library.snapshot.sessions.isEmpty)
     }
     func testSleepAtEndOfQueueReachesLastEntry() async {
         player.setSleepTimer(mode: .endOfQueue)
@@ -123,5 +123,33 @@ import XCTest
             try? await Task.sleep(for: .milliseconds(50))
         }
         return predicate()
+    }
+
+    func testPausedSeekAndSystemMetadataStayConsistent() async {
+        player.play(track, in: [track, track])
+        player.pause(immediate: true)
+        player.seek(to: 0.8)
+        XCTAssertEqual(player.elapsed, 0.8, accuracy: 0.01)
+        let sought = await until { abs(self.player.lyricPlaybackTime - 0.8) < 0.08 }
+        XCTAssertTrue(sought)
+        player.synchronizeSystemPlayback()
+        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+        XCTAssertEqual(info?[MPMediaItemPropertyTitle] as? String, track.title)
+        XCTAssertEqual((info?[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber)?.doubleValue, 0)
+        XCTAssertEqual((info?[MPNowPlayingInfoPropertyElapsedPlaybackTime] as? NSNumber)?.doubleValue ?? -1, 0.8, accuracy: 0.08)
+        XCTAssertTrue(MPRemoteCommandCenter.shared().nextTrackCommand.isEnabled)
+    }
+
+    func testMediaServicesResetPreservesPositionWithoutAutoplay() async {
+        player.play(track, in: [track, track])
+        player.pause(immediate: true)
+        player.seek(to: 0.6)
+        let before = player.queue.entries
+        NotificationCenter.default.post(name: AVAudioSession.mediaServicesWereResetNotification, object: AVAudioSession.sharedInstance())
+        for _ in 0..<5 { await Task.yield() }
+        XCTAssertEqual(player.queue.entries, before)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(player.elapsed, 0.6, accuracy: 0.08)
+        XCTAssertTrue(MPRemoteCommandCenter.shared().playCommand.isEnabled)
     }
 }

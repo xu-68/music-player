@@ -23,14 +23,17 @@ enum AppPreferences {
     var body: some Scene {
         WindowGroup {
             RootView().environment(library).environment(player).tint(MusicDesign.accent)
+                .font(MusicTypography.body)
                 .defaultAppStorage(AppPreferences.defaults)
                 .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
                 .task { if AppPreferences.defaults.bool(forKey: "autoScanMusic") { await library.scanMusic(quiet: true) } }
                 .onChange(of: scenePhase) { _, phase in
+                    if phase != .active { PlayerHaptics.shared.releaseResources() }
+                    player.synchronizeSystemPlayback()
                     if phase == .active && AppPreferences.defaults.bool(forKey: "autoScanMusic") {
                         Task { await library.scanMusic(quiet: true) }
                     }
-                    if phase != .active { player.flushListening(); player.persistQueue(); Task { await library.saveNow() } }
+                    if phase != .active { player.persistQueue(); Task { await library.saveNow() } }
                 }
         }
     }

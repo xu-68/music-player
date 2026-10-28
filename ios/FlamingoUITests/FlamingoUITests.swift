@@ -119,6 +119,27 @@ final class FlamingoUITests: XCTestCase {
         let paused = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "播放"), object: toggle)
         XCTAssertEqual(XCTWaiter.wait(for: [paused], timeout: 5), .completed)
     }
+    func testLyricsManualBrowsingAndTypographySettings() {
+        app.buttons["mini-player"].tap()
+        app.buttons["show-lyrics"].tap()
+        let lyrics = app.scrollViews["lyrics-scroll"]
+        XCTAssertTrue(lyrics.waitForExistence(timeout: 5))
+        lyrics.swipeUp()
+        let follow = app.buttons["跟随歌词"]
+        XCTAssertTrue(follow.waitForExistence(timeout: 5))
+        follow.tap()
+        XCTAssertTrue(follow.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["lyric-0"].isHittable)
+        capture("17-system-typography-lyrics")
+        app.buttons["close-player"].tap()
+        app.buttons["tab-home"].tap()
+        app.buttons["设置"].tap()
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["字体粗细"].exists)
+        XCTAssertFalse(app.buttons["ExtraBold"].exists)
+        XCTAssertTrue(app.switches["平衡歌词换行"].exists)
+        XCTAssertTrue(app.switches["显示音量条"].exists)
+    }
     func testCreatePlaylistWithDuplicateSongsAndRestoreAfterRelaunch() {
         app.buttons["tab-library"].tap()
         app.buttons["library-playlists"].tap()
@@ -197,6 +218,7 @@ final class FlamingoUITests: XCTestCase {
             for _ in 0..<3 {
                 app.buttons["mini-player"].tap()
                 XCTAssertTrue(app.buttons["player-play-pause"].waitForExistence(timeout: 5))
+                waitForExpandedPlayer()
                 let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
                 let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
                 start.press(forDuration: 0.05, thenDragTo: end)
@@ -208,6 +230,58 @@ final class FlamingoUITests: XCTestCase {
             }
             capture("dismiss-\(destination)", verifyingDock: true)
         }
+    }
+    func testInteractivePlayerCancelAndMiniPlayerButtons() {
+        app.buttons["tab-library"].tap()
+        app.buttons["library-songs"].tap()
+        let miniToggle = app.buttons["mini-player-play-pause"]
+        miniToggle.tap()
+        let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "暂停"), object: miniToggle)
+        XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 8), .completed)
+        XCTAssertFalse(app.buttons["close-player"].exists, "The transport button must not expand the player")
+        miniToggle.tap()
+        app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.32))
+        let smallDrag = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.37))
+        start.press(forDuration: 0.1, thenDragTo: smallDrag, withVelocity: .slow, thenHoldForDuration: 0.3)
+        waitForExpandedPlayer()
+        XCTAssertTrue(app.buttons["player-play-pause"].isHittable)
+        app.buttons["close-player"].tap()
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
+        XCTAssertTrue(app.navigationBars["歌曲"].exists)
+        capture("18-interactive-player-restored", verifyingDock: true)
+    }
+    func testAdaptiveScrubberSeeksAndWorksAfterReopening() {
+        app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
+        let progress = app.descendants(matching: .any)["playback-progress"].firstMatch
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        let start = progress.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5))
+        let end = progress.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.5))
+        start.press(forDuration: 0.15, thenDragTo: end)
+        let sought = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            let value = (progress.value as? String ?? "").components(separatedBy: "，")[0]
+            let parts = value.split(separator: ":").compactMap { Double($0) }
+            return parts.count == 2 && abs(parts[0] * 60 + parts[1] - 25) <= 1
+        }, object: progress)
+        XCTAssertEqual(XCTWaiter.wait(for: [sought], timeout: 5), .completed)
+        app.buttons["close-player"].tap()
+        let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
+        app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
+        progress.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
+        let soughtAgain = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            (progress.value as? String ?? "").hasPrefix("0:09，")
+        }, object: progress)
+        XCTAssertEqual(XCTWaiter.wait(for: [soughtAgain], timeout: 5), .completed)
+        capture("19-adaptive-scrubber-restored")
+    }
+    private func waitForExpandedPlayer() {
+        let expanded = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "expanded"), object: app.buttons["close-player"])
+        XCTAssertEqual(XCTWaiter.wait(for: [expanded], timeout: 5), .completed)
     }
     private func capture(_ name: String, verifyingDock: Bool = false) {
         // Existence checks can pass during the native navigation push. Capture

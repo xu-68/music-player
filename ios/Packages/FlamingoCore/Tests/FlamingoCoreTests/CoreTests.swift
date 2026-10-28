@@ -59,7 +59,7 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(queue.previous())
         XCTAssertEqual(queue.current?.trackID, ids[2])
     }
-    func testFuzzySearchMetadataRankingAndRecentAlbumGrouping() {
+    func testFuzzySearchMetadataRanking() {
         var exact = Track(title: "Hello", artist: "A", album: "One", filename: "a.mp3")
         exact.composer = "Example Composer"
         let prefix = Track(title: "Hello world", filename: "b.mp3")
@@ -68,16 +68,8 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(MusicSearch.ranked([exact], query: "helo").first?.id, exact.id)
         XCTAssertEqual(MusicSearch.ranked([exact], query: "Composer").first?.id, exact.id)
         XCTAssertTrue(MusicSearch.ranked([exact], query: "no match anywhere").isEmpty)
-        let album = (0..<4).map { Track(title: "Song \($0)", album: "One", filename: "\($0).wav") }
-        let groups = RecentMusic.group(album + [prefix])
-        XCTAssertEqual(groups.count, 2); XCTAssertTrue(groups[0].isAlbum); XCTAssertEqual(groups[0].tracks.count, 4)
-        XCTAssertFalse(RecentMusic.group(Array(album.prefix(3)))[0].isAlbum)
     }
-    func testNullAndroidBackupAndSleepModes() throws {
-        let data = Data(#"[{"uri":null,"title":null,"artists":null,"album":null,"albumArtists":null,"dayStartMs":0,"timestampMs":0,"listenedMs":1000,"countsAsPlay":true}]"#.utf8)
-        let sessions = try ListeningBackup.restore(data, into: [], tracks: [], merge: false)
-        XCTAssertEqual(sessions.count, 1); XCTAssertEqual(sessions[0].seconds, 1)
-        XCTAssertEqual(try ListeningBackup.restore(data, into: sessions, tracks: [], merge: true).count, 1)
+    func testSleepModes() throws {
         let now = Date(timeIntervalSince1970: 100)
         XCTAssertEqual(SleepPlan(mode: .duration, minutes: 1, now: now).deadline, now.addingTimeInterval(60))
         XCTAssertNil(SleepPlan(mode: .endOfTrack).deadline)
@@ -143,20 +135,6 @@ final class CoreTests: XCTestCase {
         queue.clearNextInQueue()
         XCTAssertTrue(queue.nextInQueue.isEmpty); XCTAssertEqual(queue.upNext.map(\.trackID), [ids[1]])
     }
-    func testPortableStatsBackupMergeAndDeletedMetadata() throws {
-        let track = Track(title: "Song", artist: "Singer", album: "Album", filename: "a.wav")
-        var session = ListeningSession(trackID: track.id, seconds: 70)
-        session.countsAsPlay = true
-        let data = try ListeningBackup.export([session], tracks: [track])
-        let restored = try ListeningBackup.restore(data, into: [], tracks: [], merge: false)
-        XCTAssertEqual(restored[0].title, "Song")
-        XCTAssertEqual(restored[0].seconds, 70)
-        XCTAssertEqual(restored[0].countsAsPlay, true)
-        XCTAssertEqual(try ListeningBackup.restore(data, into: restored, tracks: [], merge: true).count, 1)
-        XCTAssertEqual(try ListeningBackup.restore(data, into: [session], tracks: [track], merge: false).count, 1)
-        let legacy = try JSONDecoder().decode(LibrarySnapshot.self, from: Data("{\"version\":1,\"tracks\":[],\"playlists\":[],\"sessions\":[]}".utf8))
-        XCTAssertTrue(legacy.folders.isEmpty)
-    }
     func testShufflePreservesCurrentAndRestoresOrder() {
         let ids = (0..<20).map { _ in UUID() }
         var queue = PlaybackQueue(); queue.replace(with: ids, startingAt: 5)
@@ -209,16 +187,32 @@ final class CoreTests: XCTestCase {
         XCTAssertTrue(queue.entries.isEmpty)
         XCTAssertNil(queue.current)
     }
+    func testLegacyHistoryIsIgnoredWithoutLosingLibrary() throws {
+        var original = LibrarySnapshot()
+        let track = Track(title: "歌曲", filename: "track.flac", isFavorite: true)
+        original.tracks = [track]
+        original.playlists = [.init(name: "我的歌单", trackIDs: [track.id])]
+        var legacy = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(original)) as? [String: Any])
+        legacy["sessions"] = [["obsolete": "ignored without decoding statistics"]]
+        var tracks = try XCTUnwrap(legacy["tracks"] as? [[String: Any]])
+        tracks[0]["lastPlayedAt"] = 12345.0
+        legacy["tracks"] = tracks
+        let decoded = try JSONDecoder().decode(LibrarySnapshot.self, from: JSONSerialization.data(withJSONObject: legacy))
+        XCTAssertEqual(decoded.tracks, original.tracks)
+        XCTAssertEqual(decoded.playlists, original.playlists)
+        let rewritten = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(decoded)) as? [String: Any])
+        XCTAssertNil(rewritten["sessions"])
+        let rewrittenTracks = try XCTUnwrap(rewritten["tracks"] as? [[String: Any]])
+        XCTAssertNil(rewrittenTracks[0]["lastPlayedAt"])
+    }
     func testLibraryRoundTripAndLabels() throws {
         var snapshot = LibrarySnapshot()
         let track = Track(title: "歌曲", artist: "艺人", album: "专辑", filename: "track.flac", isFavorite: true)
         snapshot.tracks = [track]
         snapshot.playlists = [.init(name: "我的歌单", trackIDs: [track.id])]
-        snapshot.sessions = [.init(trackID: track.id, seconds: 12.3)]
         let decoded = try JSONDecoder().decode(LibrarySnapshot.self, from: JSONEncoder().encode(snapshot))
         XCTAssertEqual(decoded.tracks, [track])
         XCTAssertEqual(decoded.playlists[0].trackIDs, [track.id])
-        XCTAssertEqual(decoded.sessions[0].seconds, 12.3)
         XCTAssertTrue(track.isLossless); XCTAssertTrue(track.matches("歌曲")); XCTAssertFalse(track.matches("missing"))
         XCTAssertEqual(PlaybackTime.label(-10), "0:00")
         XCTAssertEqual(PlaybackTime.label(.infinity), "0:00")

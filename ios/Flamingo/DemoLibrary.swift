@@ -30,9 +30,7 @@ import UIKit
                 let lyrics = "[00:00.00]这是用于界面验证的原创测试音频\n[00:05.00]海风轻轻经过\n[00:10.00]让时间慢下来\n[00:15.00]沿着光的方向\n[00:20.00]听见此刻\n[00:28.00]音乐留在这里"
                 var track = Track(title: record.0, artist: record.1, album: record.2, filename: filename,
                                   artworkFilename: artwork, embeddedLyrics: lyrics, duration: 36, trackNumber: 1, isFavorite: index == 0)
-                track.lastPlayedAt = Date().addingTimeInterval(Double(-index * 3600))
                 snapshot.tracks.append(track)
-                snapshot.sessions.append(.init(trackID: track.id, seconds: Double(1740 - index * 240)))
             }
             snapshot.playlists = [.init(name: "慢慢听", trackIDs: snapshot.tracks.map(\.id))]
             try JSONEncoder().encode(snapshot).write(to: LibraryPaths.database, options: .atomic)
