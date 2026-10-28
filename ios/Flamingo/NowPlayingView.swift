@@ -21,7 +21,6 @@ struct NowPlayingView: View {
     @State private var lyricsTarget: UUID?
     @State private var sleepSheet = false
     @State private var information = false
-    @AppStorage("showTranslation") private var showTranslation = true
 
     var body: some View {
         GeometryReader { proxy in
@@ -86,17 +85,6 @@ struct NowPlayingView: View {
                 .position(x: size.width / 2, y: (contentTop + contentBottom) / 2)
             metadata.frame(width: width, height: metadataHeight)
                 .position(x: size.width / 2, y: size.height * (panel == .artwork ? 0.56 : 0.1375))
-            if panel == .lyrics {
-                Button { showTranslation.toggle() } label: {
-                    Image(systemName: "character.bubble")
-                        .font(.system(size: 21, weight: .semibold))
-                        .frame(width: 39, height: 39)
-                        .background(.white.opacity(showTranslation ? 0.2 : 0.08), in: Circle())
-                        .frame(width: 44, height: 44)
-                }.buttonStyle(PressStyle()).accessibilityLabel("歌词翻译")
-                    .accessibilityValue(showTranslation ? "已开启" : "已关闭")
-                    .position(x: size.width * 0.119, y: size.height * 0.604)
-            }
             PlaybackProgressView().frame(width: width, height: 64)
                 .position(x: size.width / 2, y: size.height * 0.662 + 7)
             transport.frame(width: width * 0.875, height: 72)
@@ -252,19 +240,46 @@ private struct PlaybackProgressView: View {
             HStack {
                 Text(PlaybackTime.label(currentTime))
                 Spacer()
-                if player.current?.isLossless == true {
-                    Label("无损", systemImage: "waveform").font(MusicTypography.tabLabel)
-                        .padding(.horizontal, 5).padding(.vertical, 2)
-                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
-                }
-                Spacer()
                 Text("−" + PlaybackTime.label(max(0, player.duration - currentTime)))
-            }.frame(height: 20).font(MusicTypography.caption.weight(.medium)).monospacedDigit().foregroundStyle(.white.opacity(0.5))
+            }.frame(height: 20).font(.system(size: 13, weight: .semibold)).monospacedDigit()
+                .overlay {
+                    if player.current?.isLossless == true {
+                        HStack(spacing: 4) {
+                            LosslessMark().frame(width: 20, height: 13)
+                            Text("Lossless").font(.system(size: 12, weight: .semibold))
+                        }
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Lossless audio")
+                    }
+                }
+                .foregroundStyle(.white.opacity(0.5))
         }.onChange(of: player.current?.id) { _, _ in scrubbing = nil }
             .onChange(of: player.duration) { _, duration in if !duration.isFinite || duration <= 0 { scrubbing = nil } }
             .onChange(of: scenePhase) { _, phase in if phase != .active { scrubbing = nil } }
             .onChange(of: presentation.phase) { _, phase in if phase != .expanded { scrubbing = nil } }
             .onDisappear { scrubbing = nil }
+    }
+}
+
+private struct LosslessMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        for offset in [CGFloat(0), 0.18, 0.36] {
+            func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+                CGPoint(x: (x + offset) * rect.width, y: y * rect.height)
+            }
+            path.move(to: point(0, 0.62))
+            path.addCurve(to: point(0.23, 0.03), control1: point(0.06, 0.02), control2: point(0.13, -0.07))
+            path.addCurve(to: point(0.48, 0.95), control1: point(0.35, 0.1), control2: point(0.36, 0.9))
+            path.addCurve(to: point(0.64, 0.38), control1: point(0.57, 1.07), control2: point(0.61, 0.69))
+            path.addCurve(to: point(0.46, 1), control1: point(0.62, 0.85), control2: point(0.56, 1.1))
+            path.addCurve(to: point(0.18, 0.06), control1: point(0.31, 0.94), control2: point(0.31, 0.12))
+            path.addCurve(to: point(0.01, 0.62), control1: point(0.09, -0.01), control2: point(0.04, 0.34))
+            path.closeSubpath()
+        }
+        return path
     }
 }
 

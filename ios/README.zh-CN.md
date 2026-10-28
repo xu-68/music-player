@@ -81,3 +81,19 @@ Windows 的 `scripts/validate.py` 仅验证语法树、工程路径、资源和 
 正式启动使用用户资料库。UI 测试只有传入 `--ui-testing` 才会生成原创合成音频与绘制封面，数据目录、偏好套件独立；这些演示素材不进入 Release。
 
 GPL-3.0。原项目的许可保留；FFmpeg 未启用 GPL/非自由组件，其 LGPL 源码与完整构建步骤可通过仓库固定版本脚本重现。
+
+## 重签名后灵动岛不能返回应用的排查
+
+系统 Now Playing 的点击返回由 iOS 负责，应用没有独立的“灵动岛点击”回调。若出现前台仍展示播放状态、后台点击无法回到应用，应先核对最终安装包的身份；这些现象本身不能证明根因。
+
+在全能签中检查所选描述文件的 App ID。若它是明确的 `PREFIX.com.example.music`，签名时的 Bundle ID 应为 `com.example.music`；PREFIX 不属于 Bundle ID。不要直接照搬此示例，或随意改成其他已安装应用的标识。通配符描述文件需要签名工具正确展开最终 application-identifier，不能把星号写入最终签名身份。
+
+签名后导出的 IPA 才是核查对象，未签名构建无法验证此项。在 Mac 解压签名后的 IPA，执行：
+
+```bash
+python3 ios/scripts/verify_signing.py /path/to/Payload/Flamingo.app
+```
+
+检查脚本验证签名、Bundle ID、签名 application-identifier 与描述文件授权的一致性，不输出证书或描述文件内容。通过后仍需在 iOS 18.7 真机验证：应用内播放、切到桌面点灵动岛返回、重新进入应用时灵动岛状态、锁屏及控制中心控制。若修改 Bundle ID，系统可能将其视为新应用；先备份原应用的音乐及资料库，不要先卸载旧应用。
+
+依据：Apple TN3125 https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles

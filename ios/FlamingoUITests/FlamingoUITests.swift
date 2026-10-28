@@ -72,7 +72,7 @@ final class FlamingoUITests: XCTestCase {
     func testClassicScreensAndPlayer() {
         capture("01-home", verifyingDock: true)
         app.buttons["tab-library"].tap()
-        XCTAssertTrue(app.navigationBars["资料库"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Library"].waitForExistence(timeout: 5))
         capture("02-library", verifyingDock: true)
         app.buttons["mini-player"].tap()
         waitForExpandedPlayer()
@@ -88,7 +88,7 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["tab-search"].exists)
         app.buttons["library-songs"].tap()
-        XCTAssertTrue(app.navigationBars["歌曲"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Songs"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.searchFields.firstMatch.exists)
         XCTAssertTrue(app.buttons["mini-player-next"].isHittable)
         capture("06-songs-search", verifyingDock: true)
@@ -158,7 +158,7 @@ final class FlamingoUITests: XCTestCase {
     func testCreatePlaylistWithDuplicateSongsAndRestoreAfterRelaunch() {
         app.buttons["tab-library"].tap()
         app.buttons["library-playlists"].tap()
-        app.buttons["新建歌单"].tap()
+        app.buttons["New Playlist"].tap()
         let name = app.textFields["playlist-name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Test playlist")
         app.buttons["playlist-add-songs"].tap()
@@ -272,7 +272,7 @@ final class FlamingoUITests: XCTestCase {
         app.buttons["close-player"].tap()
         let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
-        XCTAssertTrue(app.navigationBars["歌曲"].exists)
+        XCTAssertTrue(app.navigationBars["Songs"].exists)
         capture("18-interactive-player-restored", verifyingDock: true)
     }
     func testAdaptiveScrubberSeeksAndWorksAfterReopening() {

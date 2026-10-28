@@ -12,12 +12,12 @@ struct HomeView: View {
     var body: some View {
         Group {
             if library.tracks.isEmpty {
-                MusicEmptyState(title: "音乐，就在这里", message: "", symbol: "music.note.house")
+                MusicEmptyState(title: "Your music lives here", message: "", symbol: "music.note.house")
             } else {
                 GeometryReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 28) {
-                            shelf(title: "为你精选", tracks: suggestions, width: min(proxy.size.width * 0.72, 320), featured: true)
+                            shelf(title: "Made for You", tracks: suggestions, width: min(proxy.size.width * 0.72, 320), featured: true)
                         }.padding(.vertical, 12)
                     }
                 }
@@ -25,14 +25,14 @@ struct HomeView: View {
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
-                Text("主页").font(MusicTypography.largeTitle)
+                Text("Home").font(MusicTypography.largeTitle)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
                 Button(action: settingsAction) {
                     Image(systemName: "person.crop.circle")
                         .font(.system(size: 30, weight: .regular))
                         .frame(width: 44, height: 44).contentShape(Rectangle())
-                }.accessibilityLabel("设置")
+                }.accessibilityLabel("Settings")
             }.tint(MusicDesign.accent)
                 .padding(.leading, MusicDesign.pageInset).padding(.trailing, 13)
                 .padding(.top, 8).padding(.bottom, 12)
@@ -77,16 +77,16 @@ struct LibraryView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                NavigationLink { PlaylistsView() } label: { LibraryCategory(title: "歌单", symbol: "music.note.list") }.accessibilityIdentifier("library-playlists")
-                NavigationLink { ArtistsView() } label: { LibraryCategory(title: "艺人", symbol: "music.mic") }.accessibilityIdentifier("library-artists")
-                NavigationLink { AlbumsView() } label: { LibraryCategory(title: "专辑", symbol: "square.stack") }.accessibilityIdentifier("library-albums")
-                NavigationLink { SongsView(title: "歌曲") } label: { LibraryCategory(title: "歌曲", symbol: "music.note") }.accessibilityIdentifier("library-songs")
+                NavigationLink { PlaylistsView() } label: { LibraryCategory(title: "Playlists", symbol: "music.note.list") }.accessibilityIdentifier("library-playlists")
+                NavigationLink { ArtistsView() } label: { LibraryCategory(title: "Artists", symbol: "music.mic") }.accessibilityIdentifier("library-artists")
+                NavigationLink { AlbumsView() } label: { LibraryCategory(title: "Albums", symbol: "square.stack") }.accessibilityIdentifier("library-albums")
+                NavigationLink { SongsView(title: "Songs") } label: { LibraryCategory(title: "Songs", symbol: "music.note") }.accessibilityIdentifier("library-songs")
                 if library.tracks.isEmpty {
-                    MusicEmptyState(title: "你的资料库", message: "")
+                    MusicEmptyState(title: "Your Library", message: "")
                         .frame(minHeight: 280)
                 }
             }.padding(.horizontal, MusicDesign.pageInset).padding(.bottom, 24)
-        }.buttonStyle(.plain).navigationTitle("资料库")
+        }.buttonStyle(.plain).navigationTitle("Library")
     }
 }
 
@@ -131,8 +131,8 @@ struct AlbumsView: View {
         ScrollView {
             AlbumGrid(albums: library.albums)
                 .padding(MusicDesign.pageInset)
-        }.navigationTitle("专辑")
-            .overlay { if library.albums.isEmpty { MusicEmptyState(title: "还没有专辑", message: "导入带有专辑标签的音频后，会在这里自动整理。", symbol: "square.stack") } }
+        }.navigationTitle("Albums")
+            .overlay { if library.albums.isEmpty { MusicEmptyState(title: "No Albums Yet", message: "导入带有专辑标签的音频后，会在这里自动整理。", symbol: "square.stack") } }
     }
 }
 
@@ -142,10 +142,10 @@ struct CollectionPlayButtons: View {
     var body: some View {
         HStack(spacing: 14) {
             Button { if let first = tracks.first { player.play(first, in: tracks) } } label: {
-                Label("播放", systemImage: "play.fill").frame(maxWidth: .infinity).frame(height: 46)
+                Label("Play", systemImage: "play.fill").frame(maxWidth: .infinity).frame(height: 46)
             }
             Button { if let first = tracks.randomElement() { player.play(first, in: tracks, shuffled: true) } } label: {
-                Label("随机播放", systemImage: "shuffle").frame(maxWidth: .infinity).frame(height: 46)
+                Label("Shuffle", systemImage: "shuffle").frame(maxWidth: .infinity).frame(height: 46)
             }
         }.font(MusicTypography.headline).buttonStyle(PressStyle())
             .background { HStack(spacing: 14) { RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemBackground)); RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemBackground)) } }
@@ -180,7 +180,7 @@ struct SongsView: View {
             }
         }.listStyle(.plain).navigationTitle(title).searchable(text: $query, prompt: "歌曲、艺人或专辑")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { SongSortMenu(sort: $songSort, descending: $descending) } }
-            .overlay { if tracks.isEmpty { MusicEmptyState(title: query.isEmpty ? "还没有歌曲" : "没有找到结果", message: query.isEmpty ? "这里会显示你导入的音乐。" : "试试其他歌曲、艺人或专辑名称。", symbol: query.isEmpty ? "music.note" : "magnifyingglass") } }
+            .overlay { if tracks.isEmpty { MusicEmptyState(title: query.isEmpty ? "No Songs Yet" : "No Results", message: query.isEmpty ? "这里会显示你导入的音乐。" : "试试其他歌曲、艺人或专辑名称。", symbol: query.isEmpty ? "music.note" : "magnifyingglass") } }
             .confirmationDialog("删除这首歌曲及音乐源文件？", isPresented: $showingDeletion,
                                 titleVisibility: .visible, presenting: pendingDeletion) { track in
                 Button("删除歌曲及音乐文件", role: .destructive) { player.removeFromLibrary(track.id); pendingDeletion = nil }
@@ -206,8 +206,8 @@ struct ArtistsView: View {
                     if library.snapshot.followedArtists.contains(artist) { Image(systemName: "star.fill").font(MusicTypography.caption).foregroundStyle(MusicDesign.accent) }
                 }.padding(.vertical, 4)
             }
-        }.listStyle(.plain).navigationTitle("艺人")
-            .overlay { if artists.isEmpty { MusicEmptyState(title: "没有找到艺人", message: "导入带有艺人标签的音频后，会在这里自动整理。", symbol: "music.mic") } }
+        }.listStyle(.plain).navigationTitle("Artists")
+            .overlay { if artists.isEmpty { MusicEmptyState(title: "No Artists Found", message: "导入带有艺人标签的音频后，会在这里自动整理。", symbol: "music.mic") } }
     }
 }
 
@@ -226,8 +226,8 @@ struct PlaylistsView: View {
     }
     var body: some View {
         List {
-            Button("新建歌单", systemImage: "plus") { creating = true }.frame(minHeight: 44)
-            NavigationLink { SongsView(title: "收藏的歌曲", favoritesOnly: true) } label: { Label("收藏的歌曲", systemImage: "star.fill") }
+            Button("New Playlist", systemImage: "plus") { creating = true }.frame(minHeight: 44)
+            NavigationLink { SongsView(title: "Favorite Songs", favoritesOnly: true) } label: { Label("Favorite Songs", systemImage: "star.fill") }
             ForEach(playlists) { playlist in
                 NavigationLink { PlaylistDetailView(id: playlist.id) } label: {
                     HStack(spacing: 12) {
@@ -237,9 +237,9 @@ struct PlaylistsView: View {
                     }.padding(.vertical, 5)
                 }.contextMenu {
                     Button(playlist.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") { library.togglePin(playlist.id) }
-                    Button("编辑歌单", systemImage: "pencil") { editingPlaylist = playlist }
+                    Button("Edit Playlist", systemImage: "pencil") { editingPlaylist = playlist }
                     Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(library.tracks(for: playlist).map(\.id), next: true) }
-                    Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
+                    Button("Add to Playlist", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
                     Button("删除", role: .destructive) { deleted = playlist; library.deletePlaylist(playlist.id) }
                 }.moveDisabled(playlist.isPinned != true)
             }.onDelete { offsets in
@@ -250,10 +250,10 @@ struct PlaylistsView: View {
                 let valid = IndexSet(from.filter { $0 < pins.count })
                 pins.move(fromOffsets: valid, toOffset: min(to, pins.count)); library.reorderPins(pins.map(\.id))
             }
-        }.listStyle(.plain).navigationTitle("歌单")
+        }.listStyle(.plain).navigationTitle("Playlists")
             .safeAreaInset(edge: .bottom) {
                 if let value = deleted {
-                    HStack { Text("已删除“\(value.name)”").lineLimit(1); Spacer(); Button("撤销") { library.restorePlaylist(value); deleted = nil }; Button("完成") { deleted = nil } }
+                    HStack { Text("已删除“\(value.name)”").lineLimit(1); Spacer(); Button("撤销") { library.restorePlaylist(value); deleted = nil }; Button("Done") { deleted = nil } }
                         .font(MusicTypography.subheadline).padding().background(.regularMaterial)
                 }
             }
@@ -314,17 +314,17 @@ struct PlaylistDetailView: View {
                 let destination = to < displayed.count ? displayed[to].position : value.trackIDs.count
                 value.trackIDs.move(fromOffsets: positions, toOffset: destination); library.updatePlaylist(value)
             }
-        }.listStyle(.plain).navigationTitle(playlist?.name ?? "歌单")
+        }.listStyle(.plain).navigationTitle(playlist?.name ?? "Playlists")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { SongSortMenu(sort: $sort, descending: $descending, manual: true) }
-                ToolbarItem(placement: .topBarTrailing) { Button("编辑歌单", systemImage: "pencil") { editing = true } }
+                ToolbarItem(placement: .topBarTrailing) { Button("Edit Playlist", systemImage: "pencil") { editing = true } }
                 ToolbarItem(placement: .topBarTrailing) { EditButton() }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         if let playlist {
                             Button(playlist.isPinned == true ? "取消置顶" : "置顶", systemImage: "pin") { library.togglePin(playlist.id) }
                             Button("接下来播放", systemImage: "text.line.first.and.arrowtriangle.forward") { player.enqueue(library.tracks(for: playlist).map(\.id), next: true) }
-                            Button("添加到歌单", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
+                            Button("Add to Playlist", systemImage: "text.badge.plus") { library.playlistAddition = PlaylistAddition(trackIDs: playlist.trackIDs) }
                         }
                     } label: { Image(systemName: "ellipsis") }
                 }
