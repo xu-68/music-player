@@ -139,10 +139,8 @@ struct SettingsView: View {
     @Environment(PlayerStore.self) private var player
     @AppStorage("appearance") private var appearance = "system"
     @AppStorage("animatedBackground") private var animatedBackground = true
-    @AppStorage("lyricBlur") private var lyricBlur = false
     @AppStorage("lyricBalance") private var lyricBalance = false
     @AppStorage("lyricWeight") private var lyricWeight = "ExtraBold"
-    @AppStorage("showTranslation") private var translation = true
     @AppStorage("showVolume") private var showVolume = true
     @AppStorage("playerCorner") private var corner = 30.0
     @AppStorage("animatedCovers") private var covers = false
@@ -168,10 +166,8 @@ struct SettingsView: View {
                     VStack(alignment: .leading) { Text("播放器收起圆角 · \(Int(corner))"); Slider(value: $corner, in: 0...60, step: 1) }
                 }
                 Section("歌词") {
-                    Toggle("显示翻译（关闭后显示音译）", isOn: $translation)
                     Picker("字体粗细", selection: $lyricWeight) { ForEach(["Thin", "ExtraLight", "Light", "Regular", "Medium", "SemiBold", "Bold", "ExtraBold", "Black"], id: \.self) { Text($0).tag($0) } }
                     Toggle("平衡歌词换行", isOn: $lyricBalance)
-                    Toggle("非当前歌词模糊", isOn: $lyricBlur)
                 }
                 Section {
                     Toggle("动态专辑封面", isOn: $covers)
@@ -182,7 +178,7 @@ struct SettingsView: View {
                     Toggle("自动扫描媒体库", isOn: $refresh).accessibilityIdentifier("auto-scan-music")
                     Button("扫描媒体库", systemImage: "arrow.clockwise") { Task { await library.scanMusic() } }
                         .disabled(library.importing).accessibilityIdentifier("scan-music")
-                    Text("在“文件 → 我的 iPhone → Flamingo → Music”中移入音乐文件，支持子文件夹。开启自动扫描后，启动或返回应用时更新媒体库。删除歌曲会同时删除此处的音乐文件。")
+                    Text("在“文件 → 我的 iPhone → music → Music”中移入音乐文件，支持子文件夹。开启自动扫描后，启动或返回应用时更新媒体库。删除歌曲会同时删除此处的音乐文件。")
                         .font(.footnote).foregroundStyle(.secondary)
                     TextField("艺人拆分符号", text: $artistSeparators)
                 }
@@ -204,7 +200,7 @@ struct SettingsView: View {
                     Button("清空统计", role: .destructive) { clearing = "统计"; confirmClear = true }
                     Button("清空最近播放", role: .destructive) { clearing = "最近播放"; confirmClear = true }
                 } header: { Text("历史与备份") } footer: { Text("支持原版 Flamingo 统计 JSON。合并导入会按原始事件标识去重。") }
-                Section("关于 Flamingo") {
+                Section("关于 music") {
                     LabeledContent("版本", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"))")
                     Text("SwiftUI · UIKit · AVFoundation · FFmpeg。Xposed 状态栏歌词、Android 通知图标和 AudioTrack 参数为 Android 专属；iOS 使用系统锁屏控制、后台音频和 AirPlay。").font(.footnote).foregroundStyle(.secondary)
                     Link("原项目与源代码", destination: URL(string: "https://github.com/shouryadixitisverycool/Flamingo")!)

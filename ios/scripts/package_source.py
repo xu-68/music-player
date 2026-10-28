@@ -3,7 +3,7 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT = Path(__file__).resolve().parent.parent
-OUTPUT = ROOT.parent.parent / "Flamingo-iOS-source.zip"
+OUTPUT = ROOT.parent.parent / "music-source.zip"
 excluded = {".validation-tools", ".build", ".swiftpm", "Build", "__pycache__"}
 with ZipFile(OUTPUT, "w", compression=ZIP_DEFLATED) as archive:
     for path in sorted(ROOT.rglob("*")):

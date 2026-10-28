@@ -78,9 +78,11 @@ final class FlamingoUITests: XCTestCase {
         capture("05-queue")
         app.buttons["close-player"].tap()
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 5))
-        app.buttons["tab-stats"].tap()
-        XCTAssertTrue(app.navigationBars["统计"].waitForExistence(timeout: 5))
-        capture("06-stats", verifyingDock: true)
+        app.buttons["tab-search"].tap()
+        XCTAssertTrue(app.navigationBars["Search"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.searchFields.firstMatch.exists)
+        XCTAssertTrue(app.buttons["mini-player-next"].isHittable)
+        capture("06-search", verifyingDock: true)
     }
     func testPlaybackAndSeekFromLyrics() {
         app.buttons["mini-player"].tap()
@@ -187,6 +189,25 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["沿岸"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["mini-player"].exists)
         capture("12-album-detail", verifyingDock: true)
+    }
+    func testSwipeDismissRestoresHomeAndLibrary() {
+        for destination in ["tab-home", "tab-library"] {
+            app.buttons[destination].tap()
+            let originalFrame = app.buttons["mini-player"].frame
+            for _ in 0..<3 {
+                app.buttons["mini-player"].tap()
+                XCTAssertTrue(app.buttons["player-play-pause"].waitForExistence(timeout: 5))
+                let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
+                let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                start.press(forDuration: 0.05, thenDragTo: end)
+                let dock = app.buttons["mini-player"]
+                let restored = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: dock)
+                XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
+                XCTAssertEqual(dock.frame.minY, originalFrame.minY, accuracy: 1)
+                XCTAssertTrue(app.buttons[destination].isHittable)
+            }
+            capture("dismiss-\(destination)", verifyingDock: true)
+        }
     }
     private func capture(_ name: String, verifyingDock: Bool = false) {
         // Existence checks can pass during the native navigation push. Capture

@@ -14,7 +14,7 @@ struct HomeView: View {
     var body: some View {
         Group {
             if library.tracks.isEmpty {
-                MusicEmptyState(title: "音乐，就在这里", message: "把音乐移入“文件 → 我的 iPhone → Flamingo → Music”，然后扫描媒体库。",
+                MusicEmptyState(title: "音乐，就在这里", message: "把音乐移入“文件 → 我的 iPhone → music → Music”，然后扫描媒体库。",
                                 symbol: "music.note.house", actionTitle: "扫描媒体库", action: importAction)
             } else {
                 GeometryReader { proxy in
@@ -103,7 +103,7 @@ struct LibraryView: View {
                 NavigationLink { AlbumsView() } label: { LibraryCategory(title: "专辑", symbol: "square.stack") }.accessibilityIdentifier("library-albums")
                 NavigationLink { SongsView(title: "歌曲") } label: { LibraryCategory(title: "歌曲", symbol: "music.note") }.accessibilityIdentifier("library-songs")
                 if library.tracks.isEmpty {
-                    MusicEmptyState(title: "你的资料库", message: "把音乐移入“文件 → 我的 iPhone → Flamingo → Music”，然后扫描媒体库。", actionTitle: "扫描媒体库", action: importAction)
+                    MusicEmptyState(title: "你的资料库", message: "把音乐移入“文件 → 我的 iPhone → music → Music”，然后扫描媒体库。", actionTitle: "扫描媒体库", action: importAction)
                         .frame(minHeight: 280)
                 }
             }.padding(.horizontal, MusicDesign.pageInset).padding(.bottom, 24)

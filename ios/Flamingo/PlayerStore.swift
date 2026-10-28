@@ -36,6 +36,14 @@ import Observation
     @ObservationIgnored private var dailyListeningIDs: [Date: UUID] = [:]
     @ObservationIgnored private var lastPersistedPosition: Double = 0
     var current: Track? { queue.current.flatMap { library.track($0.trackID) } }
+    var canGoNext: Bool {
+        var candidate = queue
+        return candidate.advance() && candidate.current.flatMap { library.track($0.trackID) } != nil
+    }
+    var canGoPrevious: Bool {
+        var candidate = queue
+        return candidate.previous() && candidate.current.flatMap { library.track($0.trackID) } != nil
+    }
 
     init(library: LibraryStore) {
         self.library = library
@@ -98,18 +106,21 @@ import Observation
         }
         flushListening(); persistQueue(); updateNowPlaying()
     }
-    func next(automatic: Bool = false) {
+    @discardableResult func next(automatic: Bool = false) -> Bool {
         if automatic, sleepPlan?.mode == .endOfTrack || automatic && sleepPlan?.mode == .endOfQueue && queue.upcoming.isEmpty {
-            fireSleepTimer(); return
+            fireSleepTimer(); return false
         }
+        // An unavailable manual skip must not pause the current song.
+        guard automatic || canGoNext else { return false }
         flushListening()
-        if queue.advance(automatic: automatic) { loadCurrent(autoplay: true) }
-        else { pause() }
+        if queue.advance(automatic: automatic) { loadCurrent(autoplay: true); return true }
+        pause(); return false
     }
-    func previous() {
-        if elapsed > 3 { seek(to: 0); return }
+    @discardableResult func previous() -> Bool {
+        guard canGoPrevious else { return false }
         flushListening()
-        if queue.previous() { loadCurrent(autoplay: true) } else { seek(to: 0) }
+        if queue.previous() { loadCurrent(autoplay: true); return true }
+        return false
     }
     func seek(to value: Double) {
         guard value.isFinite else { return }
@@ -243,6 +254,7 @@ import Observation
     func persistQueue() {
         if let data = try? JSONEncoder().encode(queue) { AppPreferences.defaults.set(data, forKey: "playbackQueue") }
         AppPreferences.defaults.set(elapsed, forKey: "playbackPosition")
+        updateRemoteCommandAvailability()
     }
 
     private func loadCurrent(autoplay: Bool) {
@@ -293,18 +305,26 @@ import Observation
         if abs(elapsed - lastPersistedPosition) >= 5 { lastPersistedPosition = elapsed; persistQueue() }
     }
     private func updateNowPlaying() {
-        guard let track = current else { return }
+        guard let track = current else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            updateRemoteCommandAvailability()
+            return
+        }
         var info: [String: Any] = [MPMediaItemPropertyTitle: track.title,
                                   MPMediaItemPropertyArtist: track.artist,
                                   MPMediaItemPropertyAlbumTitle: track.album,
                                   MPMediaItemPropertyPlaybackDuration: duration,
                                   MPNowPlayingInfoPropertyElapsedPlaybackTime: elapsed,
                                   MPNowPlayingInfoPropertyPlaybackRate: player.rate,
+                                  MPNowPlayingInfoPropertyMediaType: MPNowPlayingInfoMediaType.audio.rawValue,
+                                  MPNowPlayingInfoPropertyPlaybackQueueIndex: queue.index,
+                                  MPNowPlayingInfoPropertyPlaybackQueueCount: queue.entries.count,
                                   MPNowPlayingInfoPropertyDefaultPlaybackRate: 1.0]
         if let image = ArtworkCache.shared.image(track.artworkFilename) {
             info[MPMediaItemPropertyArtwork] = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
         }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        updateRemoteCommandAvailability()
     }
     private func observeNotifications() {
         let center = NotificationCenter.default
@@ -338,22 +358,60 @@ import Observation
     }
     private func configureRemoteCommands() {
         let commands = MPRemoteCommandCenter.shared()
-        func bind(_ command: MPRemoteCommand, _ action: @escaping @MainActor () -> Void) {
-            command.isEnabled = true
-            let target = command.addTarget { _ in Task { @MainActor in action() }; return .success }
+        func bind(_ command: MPRemoteCommand, _ action: @escaping @MainActor () -> MPRemoteCommandHandlerStatus) {
+            let target = command.addTarget { _ in
+                // Return the result after dispatching the action, rather than
+                // acknowledging a Task that has not selected its track yet.
+                if Thread.isMainThread { return MainActor.assumeIsolated { action() } }
+                return DispatchQueue.main.sync { MainActor.assumeIsolated { action() } }
+            }
             remoteTargets.append((command, target))
         }
-        bind(commands.playCommand) { [weak self] in self?.resume() }
-        bind(commands.pauseCommand) { [weak self] in self?.pause() }
-        bind(commands.togglePlayPauseCommand) { [weak self] in self?.toggle() }
-        bind(commands.nextTrackCommand) { [weak self] in self?.next() }
-        bind(commands.previousTrackCommand) { [weak self] in self?.previous() }
+        bind(commands.playCommand) { [weak self] in
+            guard let self, self.current != nil else { return .noSuchContent }
+            self.resume(); return self.wantsPlayback ? .success : .commandFailed
+        }
+        bind(commands.pauseCommand) { [weak self] in
+            guard let self, self.current != nil else { return .noSuchContent }
+            self.pause(); return .success
+        }
+        bind(commands.togglePlayPauseCommand) { [weak self] in
+            guard let self, self.current != nil else { return .noSuchContent }
+            self.toggle(); return .success
+        }
+        bind(commands.nextTrackCommand) { [weak self] in
+            self?.next() == true ? .success : .noSuchContent
+        }
+        bind(commands.previousTrackCommand) { [weak self] in
+            self?.previous() == true ? .success : .noSuchContent
+        }
         let target = commands.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let position = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
-            Task { @MainActor [weak self] in self?.seek(to: position.positionTime) }
-            return .success
+            let action: @MainActor () -> MPRemoteCommandHandlerStatus = {
+                guard let self, self.current != nil, position.positionTime.isFinite else { return .noSuchContent }
+                self.seek(to: position.positionTime); return .success
+            }
+            if Thread.isMainThread { return MainActor.assumeIsolated { action() } }
+            return DispatchQueue.main.sync { MainActor.assumeIsolated { action() } }
         }
-        commands.changePlaybackPositionCommand.isEnabled = true
         remoteTargets.append((commands.changePlaybackPositionCommand, target))
+        commands.skipForwardCommand.isEnabled = false
+        commands.skipBackwardCommand.isEnabled = false
+        updateRemoteCommandAvailability()
+    }
+    private func updateRemoteCommandAvailability() {
+        let commands = MPRemoteCommandCenter.shared()
+        let loaded = current != nil
+        commands.playCommand.isEnabled = loaded
+        commands.pauseCommand.isEnabled = loaded
+        commands.togglePlayPauseCommand.isEnabled = loaded
+        commands.changePlaybackPositionCommand.isEnabled = loaded
+        commands.nextTrackCommand.isEnabled = canGoNext
+        commands.previousTrackCommand.isEnabled = canGoPrevious
+    }
+    deinit {
+        for (command, target) in remoteTargets { command.removeTarget(target) }
+        for observer in notifications { NotificationCenter.default.removeObserver(observer) }
+        if let timeObserver { player.removeTimeObserver(timeObserver) }
     }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 struct AnimatedAlbumArtwork: View {
     var track: Track?
     var active: Bool
+    var fullBleed = false
     @Environment(\.scenePhase) private var phase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("animatedCovers") private var enabled = false
@@ -14,11 +15,20 @@ struct AnimatedAlbumArtwork: View {
             .map { $0.trimmingCharacters(in: .whitespaces) }.contains(track?.album ?? "")
     }
     var body: some View {
-        ArtworkView(track: track, radius: 16)
+        GeometryReader { proxy in
+            ZStack {
+                if let image = ArtworkCache.shared.image(track?.artworkFilename) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    ArtworkView(track: track, radius: 0)
+                }
+            }.frame(width: proxy.size.width, height: proxy.size.height).clipped()
+        }
+            .clipShape(RoundedRectangle(cornerRadius: fullBleed ? 0 : 16, style: .continuous))
             .overlay {
                 if allowed, let name = track?.videoFilename {
                     LoopingVideo(url: LibraryPaths.video.appending(path: name), playing: active && phase == .active)
-                        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .clipShape(RoundedRectangle(cornerRadius: fullBleed ? 0 : 16, style: .continuous))
                 }
             }
     }

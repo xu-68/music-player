@@ -26,6 +26,18 @@ struct NowPlayingView: View {
             let landscape = proxy.size.width > proxy.size.height
             ZStack {
                 FlowingArtworkBackground(track: player.current, active: player.isPlaying)
+                if panel == .artwork {
+                    AnimatedAlbumArtwork(track: player.current, active: player.isPlaying, fullBleed: true)
+                        .frame(width: proxy.size.width, height: max(proxy.size.width, proxy.size.height * 0.72))
+                        .mask {
+                            LinearGradient(stops: [.init(color: .black, location: 0),
+                                                   .init(color: .black, location: 0.58),
+                                                   .init(color: .clear, location: 1)],
+                                           startPoint: .top, endPoint: .bottom)
+                        }
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
                 VStack(spacing: 0) {
                     header.padding(.bottom, 4)
                     if landscape {
@@ -34,14 +46,19 @@ struct NowPlayingView: View {
                             VStack(spacing: 20) { metadata; PlaybackProgressView(); transport; if showVolume { volume }; footer }.frame(maxWidth: 380)
                         }.padding(.horizontal, 40).padding(.bottom, 20)
                     } else {
+                        let compact = proxy.size.height < 740
                         VStack(spacing: 0) {
+                            if panel != .artwork {
+                                metadata.padding(.top, 10).padding(.bottom, 18)
+                            }
                             primaryContent.frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.bottom, panel == .artwork ? 20 : 12)
-                            metadata.padding(.bottom, 10)
-                            PlaybackProgressView().padding(.bottom, 12)
-                            transport.padding(.bottom, proxy.size.height < 700 ? 12 : 20)
-                            if showVolume { volume.padding(.bottom, 8) }
-                            footer.padding(.bottom, 4)
+                                .padding(.bottom, panel == .artwork ? 24 : 14)
+                            if panel == .artwork { metadata.padding(.bottom, 18) }
+                            PlaybackProgressView().padding(.bottom, compact ? 6 : 18)
+                            transport.frame(height: compact ? 76 : 104)
+                                .padding(.bottom, compact ? 12 : 28)
+                            if showVolume { volume.padding(.bottom, compact ? 10 : 20) }
+                            footer.padding(.bottom, compact ? 8 : 22)
                         }.padding(.horizontal, 30)
                     }
                 }.padding(.top, safeArea.top + 8).padding(.bottom, safeArea.bottom)
@@ -49,7 +66,7 @@ struct NowPlayingView: View {
             }.clipShape(RoundedRectangle(cornerRadius: drag > 0 ? corner : 0, style: .continuous))
                 .offset(y: drag).scaleEffect(reduceMotion ? 1 : 1 - min(drag / 5000, 0.06), anchor: .bottom)
                 .animation(reduceMotion ? nil : MusicDesign.spring, value: panel)
-                .foregroundStyle(.white).preferredColorScheme(.dark)
+                .foregroundStyle(.white).environment(\.colorScheme, .dark)
         }.accessibilityElement(children: .contain)
             .fileImporter(isPresented: $importingLyrics,
                           allowedContentTypes: [UTType(filenameExtension: "lrc") ?? .plainText, UTType(filenameExtension: "ttml") ?? .xml, .xml, .plainText]) { result in
@@ -72,7 +89,7 @@ struct NowPlayingView: View {
     }
     private var header: some View {
         Button(action: close) {
-            Capsule().fill(.white.opacity(0.35)).frame(width: 36, height: 5)
+            Capsule().fill(.white.opacity(0.35)).frame(width: 58, height: 4)
                 .frame(maxWidth: .infinity).frame(height: 26).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel("收起播放器").accessibilityIdentifier("close-player")
             .simultaneousGesture(dismissGesture)
@@ -88,16 +105,7 @@ struct NowPlayingView: View {
     @ViewBuilder private var primaryContent: some View {
         switch panel {
         case .artwork:
-            GeometryReader { proxy in
-                let side = max(80, min(proxy.size.width, proxy.size.height))
-                AnimatedAlbumArtwork(track: player.current, active: player.isPlaying)
-                    .matchedGeometryEffect(id: "player-artwork", in: namespace)
-                    .frame(width: side, height: side)
-                    .scaleEffect(player.isPlaying ? 1 : 0.83)
-                    .shadow(color: Color.black.opacity(0.35), radius: 40, x: 0, y: 25)
-                    .animation(reduceMotion ? nil : player.isPlaying ? MusicDesign.spring : .timingCurve(0.16, 1, 0.3, 1, duration: 0.35), value: player.isPlaying)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            }.gesture(dismissGesture)
+            Color.clear.contentShape(Rectangle()).gesture(dismissGesture)
         case .lyrics:
             LyricsView().transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.98)))
         case .queue:
@@ -106,18 +114,21 @@ struct NowPlayingView: View {
     }
     private var metadata: some View {
         HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(player.current?.title ?? "").font(.system(size: 24, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+            if panel != .artwork {
+                ArtworkView(track: player.current, radius: 8)
+                    .frame(width: 68, height: 68)
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(player.current?.title ?? "").font(.system(size: panel == .artwork ? 24 : 17, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
                 Menu {
                     if let track = player.current {
                         ForEach(library.artists(for: track), id: \.self) { name in Button(name) { library.navigationTarget = .artist(name) } }
                     }
-                } label: { Text(player.current?.artist ?? "").font(.system(size: 18, weight: .regular)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) }
+                } label: { Text(player.current?.artist ?? "").font(.system(size: panel == .artwork ? 18 : 14, weight: .regular)).foregroundStyle(.white.opacity(0.6)).lineLimit(1) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button { if let track = player.current { library.toggleFavorite(track.id) } } label: {
                 Image(systemName: player.current?.isFavorite == true ? "star.fill" : "star")
-                    .font(.system(size: 18, weight: .semibold)).frame(width: 32, height: 32)
-                    .background(.white.opacity(0.12), in: Circle()).frame(width: 44, height: 44)
+                    .font(.system(size: 23, weight: .regular)).frame(width: 36, height: 44)
             }.buttonStyle(PressStyle()).accessibilityLabel(player.current?.isFavorite == true ? "取消收藏" : "收藏")
             Menu {
                 if let track = player.current { TrackActions(track: track) }
@@ -126,44 +137,46 @@ struct NowPlayingView: View {
                 Button("睡眠定时", systemImage: "moon.zzz") { sleepSheet = true }
                 Button("音频信息", systemImage: "info.circle") { information = true }
             } label: {
-                Image(systemName: "ellipsis").font(.system(size: 18, weight: .bold)).frame(width: 32, height: 32)
-                    .background(.white.opacity(0.12), in: Circle()).frame(width: 44, height: 44)
+                Image(systemName: "ellipsis").font(.system(size: 22, weight: .bold)).frame(width: 36, height: 44)
             }.accessibilityLabel("更多播放选项")
         }
     }
     private var transport: some View {
-        HStack(spacing: 40) {
-            Button(action: player.previous) { Image(systemName: "backward.fill").font(.system(size: 31)).frame(width: 48, height: 62) }.accessibilityLabel("上一首")
-            Button(action: player.toggle) { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 43)).frame(width: 64, height: 62).contentTransition(.symbolEffect(.replace)) }
+        HStack(spacing: 0) {
+            Button { player.previous() } label: { Image(systemName: "backward.fill").font(.system(size: 34)).frame(maxWidth: .infinity).frame(height: 64) }.accessibilityLabel("上一首").disabled(!player.canGoPrevious)
+            Button(action: player.toggle) { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 46)).frame(maxWidth: .infinity).frame(height: 64).contentTransition(.symbolEffect(.replace)) }
                 .accessibilityLabel(player.isPlaying ? "暂停" : "播放").accessibilityIdentifier("player-play-pause")
-            Button { player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 31)).frame(width: 48, height: 62) }.accessibilityLabel("下一首")
+            Button { player.next() } label: { Image(systemName: "forward.fill").font(.system(size: 34)).frame(maxWidth: .infinity).frame(height: 64) }.accessibilityLabel("下一首").disabled(!player.canGoNext)
         }.frame(maxWidth: .infinity).foregroundStyle(.white).buttonStyle(PressStyle())
     }
     private var volume: some View {
         HStack(spacing: 14) {
             Image(systemName: "speaker.fill").font(.system(size: 13))
-            SystemVolumeSlider().frame(height: 30).padding(.top, 4)
+            SystemVolumeSlider().frame(height: 30)
             Image(systemName: "speaker.wave.3.fill").font(.system(size: 15))
         }.foregroundStyle(.white.opacity(0.5)).frame(height: 35)
     }
     private var footer: some View {
-        HStack {
+        HStack(spacing: 0) {
             Button { panel = panel == .lyrics ? .artwork : .lyrics } label: {
-                Image(systemName: "quote.bubble").font(.system(size: 21)).frame(width: 46, height: 44)
-                    .background(panel == .lyrics ? .white.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 8))
-            }.accessibilityLabel("歌词").accessibilityIdentifier("show-lyrics")
-            Spacer()
-            AirPlayButton(white: true).frame(width: 48, height: 44)
-            Spacer()
+                Image(systemName: panel == .lyrics ? "quote.bubble.fill" : "quote.bubble")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(panel == .lyrics ? Color.black.opacity(0.65) : Color.white.opacity(0.65))
+                    .frame(width: 38, height: 38)
+                    .background(panel == .lyrics ? .white.opacity(0.65) : .clear, in: Circle())
+                    .frame(width: 44, height: 44)
+            }.frame(maxWidth: .infinity)
+                .accessibilityLabel("歌词").accessibilityIdentifier("show-lyrics")
+            AirPlayButton(white: true).frame(width: 44, height: 44).frame(maxWidth: .infinity)
             Button { panel = panel == .queue ? .artwork : .queue } label: {
-                Image(systemName: "list.bullet").font(.system(size: 22)).frame(width: 46, height: 44)
-                    .background(panel == .queue ? .white.opacity(0.2) : .clear, in: RoundedRectangle(cornerRadius: 8))
-            }.accessibilityLabel("待播清单").accessibilityIdentifier("show-queue")
-        }.padding(.horizontal, 18).padding(.vertical, 6)
-            .background { PlayerGlassSurface() }
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.05)).frame(height: 1).padding(.horizontal, 20) }
-            .foregroundStyle(.white.opacity(0.85)).buttonStyle(PressStyle())
+                Image(systemName: "list.bullet").font(.system(size: 23, weight: .regular))
+                    .foregroundStyle(panel == .queue ? Color.black.opacity(0.65) : Color.white.opacity(0.65))
+                    .frame(width: 38, height: 38)
+                    .background(panel == .queue ? .white.opacity(0.65) : .clear, in: Circle())
+                    .frame(width: 44, height: 44)
+            }.frame(maxWidth: .infinity)
+                .accessibilityLabel("待播清单").accessibilityIdentifier("show-queue")
+        }.buttonStyle(PressStyle())
     }
 }
 
@@ -201,8 +214,8 @@ private struct ProgressScrubber: View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.2))
-                Capsule().fill(.white).frame(width: max(4, proxy.size.width * fraction))
-            }.frame(height: touching ? 9 : 4).frame(maxHeight: .infinity).contentShape(Rectangle())
+                Rectangle().fill(.white.opacity(0.65)).frame(width: proxy.size.width * fraction)
+            }.frame(height: touching ? 9 : 6).clipShape(Capsule()).frame(maxHeight: .infinity).contentShape(Rectangle())
                 .gesture(DragGesture(minimumDistance: 0)
                     .onChanged { event in touching = true; changed(min(max(0, event.location.x / max(proxy.size.width, 1)), 1) * total) }
                     .onEnded { event in touching = false; ended(min(max(0, event.location.x / max(proxy.size.width, 1)), 1) * total) })
@@ -217,8 +230,6 @@ private struct ProgressScrubber: View {
 struct LyricsView: View {
     @Environment(PlayerStore.self) private var player
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("lyricBlur") private var blur = false
-    @AppStorage("showTranslation") private var translation = true
     @AppStorage("lyricWeight") private var weight = "ExtraBold"
     @AppStorage("lyricBalance") private var balance = false
     @State private var following = true
@@ -250,7 +261,7 @@ struct LyricsView: View {
                                                 if line.text.isEmpty {
                                                     LyricCountdown(line: line, time: player.elapsed, active: active)
                                                 } else { BalancedTextLayout(enabled: balance, right: right) { Text(line.text)
-                                                    .font(.system(size: 30, weight: PlayerPreferences.lyricWeight)).tracking(-0.5)
+                                                    .font(.system(size: 32, weight: PlayerPreferences.lyricWeight)).tracking(-0.5)
                                                     .foregroundStyle(.white.opacity(active ? 1 : 0.26))
                                                     .multilineTextAlignment(right ? .trailing : .leading)
                                                     .fixedSize(horizontal: false, vertical: true)
@@ -259,13 +270,13 @@ struct LyricsView: View {
                                             } else {
                                                 KaraokeLine(line: line, time: player.elapsed, active: active, reduceMotion: reduceMotion, balanced: balance, weight: weight)
                                             }
-                                            if let secondary = translation ? line.translation : line.transliteration { Text(secondary).font(.system(size: 17, weight: .semibold)).foregroundStyle(.white.opacity(active ? 0.8 : 0.3)) }
                                         }.frame(maxWidth: .infinity, alignment: right ? .trailing : .leading)
                                             .scaleEffect(active && !reduceMotion ? 1 : 0.97, anchor: right ? .trailing : .leading)
-                                            .blur(radius: !following || !blur || reduceMotion || activeIndex == nil ? 0 : min(2.5, Double(abs(line.id - (activeIndex ?? 0))) * 0.65))
+                                            .blur(radius: !following || active || activeIndex == nil ? 0 : min(4, 2 + Double(abs(line.id - (activeIndex ?? 0))) * 0.6))
+                                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.35), value: active)
                                     }.buttonStyle(.plain).id(line.id)
                                         .accessibilityIdentifier("lyric-\(line.id)")
-                                        .accessibilityLabel(line.text + (line.translation.map { "，" + $0 } ?? ""))
+                                        .accessibilityLabel(line.text)
                                         .accessibilityHint("跳到 \(PlaybackTime.label(line.start))")
                                 }
                             }.padding(.top, proxy.size.height * 0.3).padding(.bottom, proxy.size.height * 0.65).padding(.horizontal, 4)
@@ -351,7 +362,7 @@ private struct KaraokeLine: View {
                     .offset(y: !reduceMotion && active && progress > 0 && progress < 1 ? -1.5 : 0)
                     .animation(reduceMotion ? nil : .linear(duration: 0.1), value: progress)
             }
-        }.font(.system(size: 30, weight: PlayerPreferences.lyricWeight)).accessibilityElement(children: .ignore).accessibilityLabel(line.text)
+        }.font(.system(size: 32, weight: PlayerPreferences.lyricWeight)).accessibilityElement(children: .ignore).accessibilityLabel(line.text)
     }
 }
 

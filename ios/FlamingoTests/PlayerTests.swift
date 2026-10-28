@@ -1,4 +1,5 @@
 import FlamingoCore
+import MediaPlayer
 import XCTest
 @testable import Flamingo
 
@@ -72,6 +73,49 @@ import XCTest
         XCTAssertEqual(restored.elapsed, 0.7, accuracy: 0.05)
         XCTAssertFalse(restored.isPlaying)
         restored.pause(immediate: true)
+    }
+    func testTrackNavigationAndSystemCommandAvailability() {
+        player.play(track, in: [track, track, track], startingAt: 1)
+        player.pause(immediate: true)
+        let commands = MPRemoteCommandCenter.shared()
+        XCTAssertTrue(commands.nextTrackCommand.isEnabled)
+        XCTAssertTrue(commands.previousTrackCommand.isEnabled)
+        XCTAssertTrue(player.next())
+        player.pause(immediate: true)
+        XCTAssertEqual(player.queue.index, 2)
+        XCTAssertFalse(commands.nextTrackCommand.isEnabled)
+        player.seek(to: 0.7)
+        XCTAssertFalse(player.next())
+        XCTAssertEqual(player.elapsed, 0.7, accuracy: 0.01)
+        XCTAssertTrue(player.previous())
+        player.pause(immediate: true)
+        XCTAssertEqual(player.queue.index, 1)
+        let info = MPNowPlayingInfoCenter.default().nowPlayingInfo
+        XCTAssertEqual(info?[MPNowPlayingInfoPropertyPlaybackQueueIndex] as? Int, 1)
+        XCTAssertEqual(info?[MPNowPlayingInfoPropertyPlaybackQueueCount] as? Int, 3)
+    }
+    func testPreviousAfterThreeSecondsSelectsPreviousEntry() async throws {
+        // Extend the real WAV fixture to six seconds to exercise the old restart branch.
+        var data = try Data(contentsOf: folder.appending(path: track.originalFilename!))
+        data.append(Data(repeating: 0, count: 22_050 * 2 * 4))
+        func littleEndian(_ value: UInt32) -> Data {
+            var value = value.littleEndian
+            return withUnsafeBytes(of: &value) { Data($0) }
+        }
+        data.replaceSubrange(4..<8, with: littleEndian(UInt32(data.count - 8)))
+        data.replaceSubrange(40..<44, with: littleEndian(UInt32(data.count - 44)))
+        let url = folder.appending(path: UUID().uuidString + ".wav")
+        try data.write(to: url)
+        await library.importFiles([url])
+        let longer = try XCTUnwrap(library.tracks.first { $0.originalFilename == url.lastPathComponent })
+        defer { player.pause(immediate: true); _ = library.deleteTrack(longer.id) }
+        player.play(longer, in: [track, longer], startingAt: 1)
+        player.pause(immediate: true)
+        player.seek(to: 4)
+        XCTAssertGreaterThan(player.elapsed, 3)
+        XCTAssertTrue(player.previous())
+        XCTAssertEqual(player.current?.id, track.id)
+        XCTAssertEqual(player.queue.index, 0)
     }
     private func until(_ predicate: () -> Bool) async -> Bool {
         for _ in 0..<140 {

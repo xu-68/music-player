@@ -205,7 +205,17 @@ struct SystemVolumeSlider: UIViewRepresentable {
         let view = MPVolumeView()
         view.showsRouteButton = false
         view.tintColor = .white.withAlphaComponent(0.75)
-        view.setVolumeThumbImage(UIImage(systemName: "circle.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: 10)), for: .normal)
+        // The reference has a continuous capsule track with no visible thumb.
+        let thumb = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
+        view.setVolumeThumbImage(thumb, for: .normal)
+        func track(_ color: UIColor) -> UIImage {
+            UIGraphicsImageRenderer(size: CGSize(width: 12, height: 6)).image { _ in
+                color.setFill()
+                UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 12, height: 6), cornerRadius: 3).fill()
+            }.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: 3, bottom: 0, right: 3))
+        }
+        view.setMinimumVolumeSliderImage(track(.white.withAlphaComponent(0.8)), for: .normal)
+        view.setMaximumVolumeSliderImage(track(.white.withAlphaComponent(0.22)), for: .normal)
         view.accessibilityLabel = "系统音量"
         return view
     }
