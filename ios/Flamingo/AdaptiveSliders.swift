@@ -4,8 +4,8 @@ import SwiftUI
 import UIKit
 
 @MainActor private enum SliderMotion {
-    static let restingHeight: CGFloat = 4
-    static let activeScale: CGFloat = 2.5
+    static let restingHeight: CGFloat = 6.5
+    static let activeScale: CGFloat = 1.7
     static func animator(_ changes: @escaping () -> Void) -> UIViewPropertyAnimator {
         if UIAccessibility.isReduceMotionEnabled {
             return UIViewPropertyAnimator(duration: 0.12, curve: .easeOut, animations: changes)
@@ -72,6 +72,9 @@ final class AdaptiveScrubberControl: UIControl {
         track.backgroundColor = .white.withAlphaComponent(0.2)
         fill.backgroundColor = .white.withAlphaComponent(0.72)
         track.layer.cornerRadius = SliderMotion.restingHeight / 2
+        track.layer.cornerCurve = .continuous
+        fill.layer.cornerCurve = .continuous
+        fill.clipsToBounds = true
         track.clipsToBounds = true
         track.isUserInteractionEnabled = false
         track.addSubview(fill); addSubview(track)
@@ -87,6 +90,7 @@ final class AdaptiveScrubberControl: UIControl {
         track.center = CGPoint(x: bounds.midX, y: bounds.midY)
         let fraction = total > 0 && displayedValue.isFinite ? min(1, max(0, displayedValue / total)) : 0
         fill.frame = CGRect(x: 0, y: 0, width: track.bounds.width * fraction, height: track.bounds.height)
+        fill.layer.cornerRadius = min(track.bounds.height, fill.bounds.width) / 2
     }
     override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
         guard trackedTouch == nil, startInteraction(at: fraction(for: touch)) else { return false }
@@ -276,10 +280,17 @@ final class AdaptiveVolumeContainer: UIView {
         volume.center = CGPoint(x: bounds.midX, y: bounds.midY)
     }
     private static func trackImage(_ color: UIColor) -> UIImage {
-        UIGraphicsImageRenderer(size: CGSize(width: 12, height: SliderMotion.restingHeight)).image { _ in
-            color.setFill()
-            UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: 12, height: SliderMotion.restingHeight), cornerRadius: 2).fill()
-        }.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: 3, bottom: 0, right: 3))
+        let height = SliderMotion.restingHeight
+        let size = CGSize(width: height * 3, height: height)
+        let image = UIGraphicsImageRenderer(size: size).image { context in
+            let layer = CALayer()
+            layer.frame = CGRect(origin: .zero, size: size)
+            layer.backgroundColor = color.cgColor
+            layer.cornerRadius = height / 2
+            layer.cornerCurve = .continuous
+            layer.render(in: context.cgContext)
+        }
+        return image.resizableImage(withCapInsets: UIEdgeInsets(top: 0, left: height, bottom: 0, right: height), resizingMode: .stretch)
     }
     private func activate() {
         phase = .pressed

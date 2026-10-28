@@ -10,7 +10,7 @@
 
 AdaptiveSliders.swift 中的 AdaptiveScrubberControl 使用 UIControl 的 beginTracking、continueTracking、endTracking 和 cancelTracking。统一阶段为 idle、pressed、dragging、settling、cancelled。
 
-轨道静止为 4pt，激活时通过 UIViewPropertyAnimator 将纵向比例扩展至 2.5，即约 10pt。填充与背景位于同一个轨道容器，宽度不缩放。44pt 外部触摸区域和标签布局保持不变；活动轨道不显示独立大滑块。弹簧参数为 0.22 秒、阻尼 0.94，Reduce Motion 改为短 easeOut。动画可从当前呈现值接续，generation 排除过期完成回调。
+轨道静止为 6.5pt，激活时通过 UIViewPropertyAnimator 将纵向比例扩展至 1.7，即约 11pt。进度背景与填充均使用 continuous 连续曲率圆角，音量轨道以相同曲率绘制并保留端帽。填充与背景位于同一个轨道容器，宽度不缩放。44pt 外部触摸区域和标签布局保持不变；活动轨道不显示独立大滑块。弹簧参数为 0.22 秒、阻尼 0.94，Reduce Motion 改为短 easeOut。动画可从当前呈现值接续，generation 排除过期完成回调。
 
 拖动只更新局部预览和时间标签，不提交 seek；释放仅提交一次。音频时间继续正常推进，预览期间不会覆盖手指位置。松手后 PlayerStore 立即保留请求位置，seek 完成后再用实际位置校正。没有新增定时延迟或每帧 seek。
 

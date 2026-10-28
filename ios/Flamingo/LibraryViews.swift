@@ -2,7 +2,6 @@ import FlamingoCore
 import SwiftUI
 
 struct HomeView: View {
-    var importAction: () -> Void
     var settingsAction: () -> Void
     @Environment(LibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
@@ -13,8 +12,7 @@ struct HomeView: View {
     var body: some View {
         Group {
             if library.tracks.isEmpty {
-                MusicEmptyState(title: "音乐，就在这里", message: "把音乐移入“文件 → 我的 iPhone → music → Music”，然后扫描媒体库。",
-                                symbol: "music.note.house", actionTitle: "扫描媒体库", action: importAction)
+                MusicEmptyState(title: "音乐，就在这里", message: "", symbol: "music.note.house")
             } else {
                 GeometryReader { proxy in
                     ScrollView {
@@ -30,9 +28,6 @@ struct HomeView: View {
                 Text("主页").font(MusicTypography.largeTitle)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityAddTraits(.isHeader)
-                Button("扫描媒体库", systemImage: "arrow.clockwise", action: importAction)
-                    .labelStyle(.iconOnly).font(.system(size: 21))
-                    .frame(width: 44, height: 44).disabled(library.importing)
                 Button(action: settingsAction) {
                     Image(systemName: "person.crop.circle")
                         .font(.system(size: 30, weight: .regular))
@@ -78,7 +73,6 @@ struct HomeView: View {
 }
 
 struct LibraryView: View {
-    var importAction: () -> Void
     @Environment(LibraryStore.self) private var library
     var body: some View {
         ScrollView {
@@ -88,12 +82,11 @@ struct LibraryView: View {
                 NavigationLink { AlbumsView() } label: { LibraryCategory(title: "专辑", symbol: "square.stack") }.accessibilityIdentifier("library-albums")
                 NavigationLink { SongsView(title: "歌曲") } label: { LibraryCategory(title: "歌曲", symbol: "music.note") }.accessibilityIdentifier("library-songs")
                 if library.tracks.isEmpty {
-                    MusicEmptyState(title: "你的资料库", message: "把音乐移入“文件 → 我的 iPhone → music → Music”，然后扫描媒体库。", actionTitle: "扫描媒体库", action: importAction)
+                    MusicEmptyState(title: "你的资料库", message: "")
                         .frame(minHeight: 280)
                 }
             }.padding(.horizontal, MusicDesign.pageInset).padding(.bottom, 24)
         }.buttonStyle(.plain).navigationTitle("资料库")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("扫描媒体库", systemImage: "arrow.clockwise", action: importAction).disabled(library.importing) } }
     }
 }
 

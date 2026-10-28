@@ -12,14 +12,14 @@
 | 音频 | FadeExo / YosRenderFactory | 系统解码 + FFmpeg 软件兜底、保留原文件、格式信息、200ms 淡入淡出、后台/中断/耳机/锁屏/AirPlay；AudioTests 解码与导入，PlayerTests 真实播放 |
 | 睡眠定时 | SleepTimer / SleepTimerSheet | 倒计时/本首/队列结束、延长/取消、剩余时间、0/5/10/30 秒淡出；PlayerTests 三种实际停止测试与 UI 设置测试 |
 | 歌词发现 | MediaController / YosLrcFactory / YosTtmlFactory | 内嵌或同名歌词、TTML 优先及失败 LRC 回退、UTF-8/16；AudioTests 文件夹同名歌词回退 |
-| 歌词呈现 | LyricFormatSupport_en.md / YosLyricView | 多时间戳、逐字、翻译/音译、重叠行、v1/v2、间奏、字体权重/平衡/模糊、点击定位、跟随；核心解析测试与真实播放器 UI |
-| 动态封面 | AnimatedArtworkLibrary / AnimatedAlbumCoverOverlay | 本地视频手动导入或 anim/专辑名.mp4、静音循环、生命周期暂停/释放、专辑黑名单；AudioTests 原生视频导入 |
+| 歌词呈现 | LyricFormatSupport_en.md / YosLyricView | 多时间戳、逐字、翻译/音译、重叠行、v1/v2、间奏、系统 Bold 字体与自然换行、点击定位、跟随；核心解析测试与真实播放器 UI |
+| 动态封面 | AnimatedArtworkLibrary / AnimatedAlbumCoverOverlay | 按用户要求整套移除；使用静态专辑封面 |
 | 统计与备份 | ListenStatsTracker / ListenStatsLibrary / ListenStatsManager | 过半计数、实际媒体时间、跨日分段、历史开关、五周期、三排行、删除后保留标签、原版 JSON 导入/合并/覆盖/导出/清空；核心往返与去重、PlayerTests 统计写入 |
 | 外观和动画 | SettingsLibrary / NowPlaying / HomeNav | 深浅色、音量条、背景/栏模糊、圆角；共享封面、下拉收起、暂停缩放、背景运动、歌词过渡；UI 截图与后续真机视频对照 |
 
 ## 按用户选择与平台对应
 
-- 用户明确选择“只使用本地动态封面”，因此没有在线查找接口或歌曲元数据上传。此项属于明确选择的范围调整。
+- 用户要求整套移除动态封面；视频导入、扫描匹配、播放和黑名单均已删除。
 - Android 的 Xposed/LSPosed 状态栏歌词、通知图标、AudioTrack/MediaCodec 参数没有对应的 iOS API。系统播放能力使用 iOS 锁屏、后台音频、系统音量和音频路由；不设置无作用的仿制开关。
 - 按用户本轮要求，音乐唯一入口为“文件”App 内 Flamingo/Music。直接使用原文件，不再提供音乐文件选择器或外部目录授权；应用内确认删除同时删除 Music 中对应源文件。
 - README 提及 widgets，但原版 Manifest 未发现 AppWidgetProvider。源码 `ui/widgets` 属应用内控件，没有据此虚构上游已有桌面小组件，也没有额外加入 WidgetKit/App Group 依赖。

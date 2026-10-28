@@ -7,6 +7,7 @@ private enum PlayerPanel { case artwork, lyrics, queue }
 struct NowPlayingView: View {
     var presentation: PlayerPresentation
     var sharedArtworkAvailable: Bool
+    var sharedMetadataAvailable: Bool
     var safeArea: EdgeInsets
     var transitionTravel: CGFloat
     var close: () -> Void
@@ -14,13 +15,13 @@ struct NowPlayingView: View {
     @Environment(LibraryStore.self) private var library
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var panel = PlayerPanel.artwork
     @State private var importingLyrics = false
     @State private var lyricsTarget: UUID?
-    @State private var importingVideo = false
     @State private var sleepSheet = false
     @State private var information = false
-    @AppStorage("showVolume") private var showVolume = true
+    @AppStorage("showTranslation") private var showTranslation = true
 
     var body: some View {
         GeometryReader { proxy in
@@ -28,31 +29,32 @@ struct NowPlayingView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 FlowingArtworkBackground(track: player.current, active: player.isPlaying && presentation.isPresented)
-                VStack(spacing: 0) {
-                    header.padding(.bottom, 4)
+                Group {
                     if landscape {
-                        HStack(spacing: 36) {
-                            primaryContent.frame(maxWidth: .infinity, maxHeight: .infinity)
-                            VStack(spacing: 20) { metadata; PlaybackProgressView(); transport; if showVolume { volume }; footer }.frame(maxWidth: 380)
-                        }.padding(.horizontal, 40).padding(.bottom, 20)
-                    } else {
-                        let compact = proxy.size.height < 740
                         VStack(spacing: 0) {
-                            if panel != .artwork {
-                                metadata.padding(.top, 10).padding(.bottom, 18)
-                            }
-                            primaryContent.frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .padding(.bottom, panel == .artwork ? 24 : 14)
-                            if panel == .artwork { metadata.padding(.bottom, 18) }
-                            PlaybackProgressView().padding(.bottom, compact ? 6 : 18)
-                            transport.frame(height: compact ? 76 : 104)
-                                .padding(.bottom, compact ? 12 : 28)
-                            if showVolume { volume.padding(.bottom, compact ? 10 : 20) }
-                            footer.padding(.bottom, compact ? 8 : 22)
-                        }.padding(.horizontal, 30)
+                            header
+                            HStack(spacing: 36) {
+                                primaryContent.frame(maxWidth: .infinity, maxHeight: .infinity)
+                                VStack(spacing: 20) { metadata; PlaybackProgressView(); transport; volume; footer }
+                                    .frame(maxWidth: 380)
+                            }.padding(.horizontal, 32).padding(.bottom, 20)
+                        }.padding(.top, safeArea.top).padding(.bottom, safeArea.bottom)
+                    } else if dynamicTypeSize.isAccessibilitySize {
+                        ScrollView {
+                            VStack(spacing: 24) {
+                                header
+                                metadata
+                                primaryContent.frame(height: proxy.size.height * 0.44)
+                                PlaybackProgressView()
+                                transport
+                                volume
+                                footer
+                            }.padding(.horizontal, 24).padding(.top, safeArea.top).padding(.bottom, safeArea.bottom + 20)
+                        }
+                    } else {
+                        portraitContent(size: proxy.size)
                     }
-                }.padding(.top, safeArea.top + 8).padding(.bottom, safeArea.bottom)
-                    .frame(maxWidth: 1000).frame(maxWidth: .infinity)
+                }.frame(maxWidth: 1000).frame(maxWidth: .infinity)
                     .modifier(PlayerControlsReveal(progress: presentation.progress))
                     .accessibilityHidden(!presentation.isPresented)
             }.coordinateSpace(name: "player-content")
@@ -67,19 +69,48 @@ struct NowPlayingView: View {
                 case .failure(let error): library.errorMessage = error.localizedDescription
                 }
             }
-            .fileImporter(isPresented: $importingVideo, allowedContentTypes: [.movie, .mpeg4Movie]) { result in
-                switch result {
-                case .success(let url): if let id = lyricsTarget { Task { await library.importVideo(url, for: id) } }
-                case .failure(let error): library.errorMessage = error.localizedDescription
-                }
-            }
             .sheet(isPresented: $sleepSheet) { NavigationStack { SleepTimerView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { sleepSheet = false } } } } }
             .sheet(isPresented: $information) { TrackInformationView(track: player.current) }
             .accessibilityAction(.escape, close)
     }
+    // Full-screen proportions measured from the supplied 1280 × 2774 reference.
+    private func portraitContent(size: CGSize) -> some View {
+        let width = size.width * 0.85
+        let metadataHeight = size.width * 0.167
+        let contentTop = size.height * (panel == .artwork ? 0.11 : 0.19)
+        let contentBottom = size.height * (panel == .artwork ? 0.51 : panel == .lyrics ? 0.575 : 0.63)
+        return ZStack(alignment: .topLeading) {
+            header.frame(width: size.width, height: 44)
+                .position(x: size.width / 2, y: max(safeArea.top + 10, size.height * 0.073))
+            primaryContent.frame(width: width, height: max(1, contentBottom - contentTop))
+                .position(x: size.width / 2, y: (contentTop + contentBottom) / 2)
+            metadata.frame(width: width, height: metadataHeight)
+                .position(x: size.width / 2, y: size.height * (panel == .artwork ? 0.56 : 0.1375))
+            if panel == .lyrics {
+                Button { showTranslation.toggle() } label: {
+                    Image(systemName: "character.bubble")
+                        .font(.system(size: 21, weight: .semibold))
+                        .frame(width: 39, height: 39)
+                        .background(.white.opacity(showTranslation ? 0.2 : 0.08), in: Circle())
+                        .frame(width: 44, height: 44)
+                }.buttonStyle(PressStyle()).accessibilityLabel("歌词翻译")
+                    .accessibilityValue(showTranslation ? "已开启" : "已关闭")
+                    .position(x: size.width * 0.119, y: size.height * 0.604)
+            }
+            PlaybackProgressView().frame(width: width, height: 64)
+                .position(x: size.width / 2, y: size.height * 0.662 + 7)
+            transport.frame(width: width * 0.875, height: 72)
+                .position(x: size.width / 2, y: size.height * 0.769)
+            volume.frame(width: width, height: 44)
+                .position(x: size.width / 2, y: size.height * 0.874)
+            footer.frame(width: size.width * 0.8, height: 44)
+                .position(x: size.width / 2, y: min(size.height * 0.931, size.height - safeArea.bottom - 22))
+        }.frame(width: size.width, height: size.height)
+    }
+
     private var header: some View {
         Button(action: close) {
-            Capsule().fill(.white.opacity(0.35)).frame(width: 58, height: 4)
+            Capsule().fill(.white.opacity(0.35)).frame(width: 62, height: 4)
                 .frame(maxWidth: .infinity).frame(height: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel("收起播放器").accessibilityIdentifier("close-player")
             .accessibilityValue(String(describing: presentation.phase))
@@ -93,7 +124,7 @@ struct NowPlayingView: View {
             }
             .onEnded { value in
                 presentation.endDrag(predictedTranslation: value.predictedEndTranslation.height,
-                                     travel: transitionTravel, reduceMotion: reduceMotion)
+                                     travel: transitionTravel, reduceMotion: reduceMotion, velocity: value.velocity.height)
             }
     }
     @ViewBuilder private var primaryContent: some View {
@@ -103,7 +134,7 @@ struct NowPlayingView: View {
                 let side = max(1, min(geometry.size.width, geometry.size.height))
                 Group {
                     if reduceMotion {
-                        AnimatedAlbumArtwork(track: player.current, active: player.isPlaying && presentation.isPresented)
+                        ArtworkView(track: player.current, radius: 16)
                     } else {
                         ArtworkView(track: player.current, radius: 16)
                             .opacity(presentation.phase == .expanded && !sharedArtworkAvailable ? 1 : 0)
@@ -127,20 +158,24 @@ struct NowPlayingView: View {
     private var metadata: some View {
         HStack(spacing: 12) {
             if panel != .artwork {
-                ArtworkView(track: player.current, radius: 8)
-                    .frame(width: 68, height: 68)
+                ArtworkView(track: player.current, radius: 10)
+                    .frame(width: UIScreen.main.bounds.width * 0.167, height: UIScreen.main.bounds.width * 0.167)
                     .opacity(reduceMotion || presentation.phase == .expanded && !sharedArtworkAvailable ? 1 : 0)
                     .background { GeometryReader { cover in
                         Color.clear.preference(key: PlayerArtworkFrameKey.self, value: cover.frame(in: .named("player-content")))
                     } }
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(player.current?.title ?? "").font(panel == .artwork ? MusicTypography.title : MusicTypography.headline).lineLimit(1).minimumScaleFactor(0.7)
+                Text(player.current?.title ?? "").font(panel == .artwork ? MusicTypography.title : .system(size: 19, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
+                    .background { PlayerMetadataMeasurement(mini: false, title: true) }
+                    .opacity(sharedMetadataAvailable ? 0 : 1)
                 Menu {
                     if let track = player.current {
                         ForEach(library.artists(for: track), id: \.self) { name in Button(name) { library.navigationTarget = .artist(name) } }
                     }
-                } label: { Text(player.current?.artist ?? "").font(panel == .artwork ? MusicTypography.body : MusicTypography.subheadline).foregroundStyle(.white.opacity(0.6)).lineLimit(1) }
+                } label: { Text(player.current?.artist ?? "").font(panel == .artwork ? MusicTypography.body : .system(size: 18)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                        .background { PlayerMetadataMeasurement(mini: false, title: false) }
+                        .opacity(sharedMetadataAvailable ? 0 : 1) }
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button { if let track = player.current { library.toggleFavorite(track.id); PlayerHaptics.shared.discreteSelection() } } label: {
                 Image(systemName: player.current?.isFavorite == true ? "star.fill" : "star")
@@ -149,20 +184,19 @@ struct NowPlayingView: View {
             Menu {
                 if let track = player.current { TrackActions(track: track) }
                 Button("导入歌词", systemImage: "text.bubble") { lyricsTarget = player.current?.id; importingLyrics = true }
-                Button("导入动态封面", systemImage: "video") { lyricsTarget = player.current?.id; importingVideo = true }
                 Button("睡眠定时", systemImage: "moon.zzz") { sleepSheet = true }
                 Button("音频信息", systemImage: "info.circle") { information = true }
             } label: {
                 Image(systemName: "ellipsis").font(.system(size: 22, weight: .bold)).frame(width: 36, height: 44)
             }.accessibilityLabel("更多播放选项")
-        }
+        }.contentShape(Rectangle()).simultaneousGesture(dismissGesture)
     }
     private var transport: some View {
         HStack(spacing: 0) {
-            Button { if player.previous() { PlayerHaptics.shared.discreteSelection() } } label: { Image(systemName: "backward.fill").font(.system(size: 34)).frame(maxWidth: .infinity).frame(height: 64) }.accessibilityLabel("上一首").disabled(!player.canGoPrevious)
-            Button(action: player.toggle) { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 46)).frame(maxWidth: .infinity).frame(height: 64).contentTransition(reduceMotion ? .identity : .symbolEffect(.replace)) }
+            Button { if player.previous() { PlayerHaptics.shared.discreteSelection() } } label: { Image(systemName: "backward.fill").font(.system(size: 30)).frame(maxWidth: .infinity).frame(height: 64) }.accessibilityLabel("上一首").disabled(!player.canGoPrevious)
+            Button(action: player.toggle) { Image(systemName: player.isPlaying ? "pause.fill" : "play.fill").font(.system(size: 42)).frame(maxWidth: .infinity).frame(height: 64).contentTransition(reduceMotion ? .identity : .symbolEffect(.replace)) }
                 .accessibilityLabel(player.isPlaying ? "暂停" : "播放").accessibilityIdentifier("player-play-pause")
-            Button { if player.next() { PlayerHaptics.shared.discreteSelection() } } label: { Image(systemName: "forward.fill").font(.system(size: 34)).frame(maxWidth: .infinity).frame(height: 64) }.accessibilityLabel("下一首").disabled(!player.canGoNext)
+            Button { if player.next() { PlayerHaptics.shared.discreteSelection() } } label: { Image(systemName: "forward.fill").font(.system(size: 30)).frame(maxWidth: .infinity).frame(height: 64) }.accessibilityLabel("下一首").disabled(!player.canGoNext)
         }.frame(maxWidth: .infinity).foregroundStyle(.white).buttonStyle(PressStyle())
     }
     private var volume: some View {
@@ -176,18 +210,23 @@ struct NowPlayingView: View {
         HStack(spacing: 0) {
             Button { panel = panel == .lyrics ? .artwork : .lyrics } label: {
                 Image(systemName: panel == .lyrics ? "quote.bubble.fill" : "quote.bubble")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 21, weight: .medium))
                     .foregroundStyle(panel == .lyrics ? Color.black.opacity(0.65) : Color.white.opacity(0.65))
-                    .frame(width: 38, height: 38)
+                    .frame(width: 39, height: 39)
                     .background(panel == .lyrics ? .white.opacity(0.65) : .clear, in: Circle())
                     .frame(width: 44, height: 44)
             }.frame(maxWidth: .infinity)
                 .accessibilityLabel("歌词").accessibilityIdentifier("show-lyrics")
-            AirPlayButton(white: true).frame(width: 44, height: 44).frame(maxWidth: .infinity)
+            ZStack {
+                Image(systemName: "airplayaudio").font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .allowsHitTesting(false).accessibilityHidden(true)
+                AirPlayButton(white: true, hidesGlyph: true).frame(width: 44, height: 44)
+            }.frame(maxWidth: .infinity)
             Button { panel = panel == .queue ? .artwork : .queue } label: {
                 Image(systemName: "list.bullet").font(.system(size: 23, weight: .regular))
                     .foregroundStyle(panel == .queue ? Color.black.opacity(0.65) : Color.white.opacity(0.65))
-                    .frame(width: 38, height: 38)
+                    .frame(width: 39, height: 39)
                     .background(panel == .queue ? .white.opacity(0.65) : .clear, in: Circle())
                     .frame(width: 44, height: 44)
             }.frame(maxWidth: .infinity)
@@ -203,7 +242,7 @@ private struct PlaybackProgressView: View {
     @Environment(\.scenePhase) private var scenePhase
     private var currentTime: Double { scrubbing ?? player.elapsed }
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: -6) {
             AdaptiveProgressSlider(value: currentTime, total: player.duration, trackID: player.current?.id,
                                    enabled: presentation.phase == .expanded && scenePhase == .active,
                                    preview: { scrubbing = $0 },
@@ -220,7 +259,7 @@ private struct PlaybackProgressView: View {
                 }
                 Spacer()
                 Text("−" + PlaybackTime.label(max(0, player.duration - currentTime)))
-            }.font(MusicTypography.caption.weight(.medium)).monospacedDigit().foregroundStyle(.white.opacity(0.5))
+            }.frame(height: 20).font(MusicTypography.caption.weight(.medium)).monospacedDigit().foregroundStyle(.white.opacity(0.5))
         }.onChange(of: player.current?.id) { _, _ in scrubbing = nil }
             .onChange(of: player.duration) { _, duration in if !duration.isFinite || duration <= 0 { scrubbing = nil } }
             .onChange(of: scenePhase) { _, phase in if phase != .active { scrubbing = nil } }
@@ -233,7 +272,6 @@ struct LyricsView: View {
     var isVisible = true
     @Environment(PlayerStore.self) private var player
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("lyricBalance") private var balance = false
     @AppStorage("showTranslation") private var showTranslation = true
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .largeTitle) private var lyricSize = MusicTypography.lyricBaseSize
@@ -253,7 +291,6 @@ struct LyricsView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "quote.bubble").font(.largeTitle).foregroundStyle(.white.opacity(0.4))
                     Text("暂无歌词").font(MusicTypography.title)
-                    Text("从右上角菜单导入 LRC 或 TTML 歌词").font(MusicTypography.subheadline).foregroundStyle(.white.opacity(0.55)).multilineTextAlignment(.center)
                 }.frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollViewReader { reader in
@@ -266,10 +303,12 @@ struct LyricsView: View {
                                         player.seek(to: line.start); following = true
                                         scroll(reader, to: line.id, force: true, seeking: true)
                                     } label: {
-                                        LyricRowContent(line: line, active: active, balance: balance,
+                                        LyricRowContent(line: line, active: active,
                                                         showTranslation: showTranslation, size: lyricSize,
                                                         lineSpacing: lineSpacing, reduceMotion: reduceMotion)
                                     }.buttonStyle(.plain).id(line.id)
+                                        .blur(radius: upcomingBlur(for: line, active: active))
+                                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: upcomingBlur(for: line, active: active))
                                         .accessibilityIdentifier("lyric-\(line.id)")
                                         .accessibilityLabel(line.text.isEmpty ? "间奏" : line.text)
                                         .accessibilityHint("跳到 \(PlaybackTime.label(line.start))")
@@ -309,6 +348,12 @@ struct LyricsView: View {
             }
         }
     }
+    private func upcomingBlur(for line: LyricLine, active: Bool) -> CGFloat {
+        guard following, !dragging, !active, line.start > player.elapsed else { return 0 }
+        let lead = line.start - player.elapsed
+        return CGFloat(min(5, max(0, lead - 0.6) * 0.65))
+    }
+
     private func scroll(_ reader: ScrollViewProxy, to id: Int, force: Bool = false, seeking: Bool = false) {
         guard !dragging, player.lines.contains(where: { $0.id == id }), force || lastScrollTarget != id else { return }
         lastScrollTarget = id
@@ -320,7 +365,6 @@ struct LyricsView: View {
 private struct LyricRowContent: View {
     var line: LyricLine
     var active: Bool
-    var balance: Bool
     var showTranslation: Bool
     var size: CGFloat
     var lineSpacing: CGFloat
@@ -332,17 +376,15 @@ private struct LyricRowContent: View {
         VStack(alignment: right ? .trailing : .leading, spacing: 8) {
             if !line.words.isEmpty {
                 KaraokeLine(line: line, active: active, reduceMotion: reduceMotion,
-                            balanced: balance, size: size, lineSpacing: lineSpacing, right: right)
+                            size: size, lineSpacing: lineSpacing, right: right)
             } else if line.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 LyricCountdown(line: line, time: player.elapsed, active: active)
             } else {
-                BalancedTextLayout(enabled: balance, right: right) {
-                    Text(line.text).font(MusicTypography.lyric(size: size))
-                        .lineSpacing(lineSpacing)
-                        .foregroundStyle(.white.opacity(active ? 1 : 0.42))
-                        .multilineTextAlignment(right ? .trailing : .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(line.text).font(MusicTypography.lyric(size: size))
+                    .lineSpacing(lineSpacing)
+                    .foregroundStyle(.white.opacity(active ? 1 : 0.42))
+                    .multilineTextAlignment(right ? .trailing : .leading)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if showTranslation, let translation = line.translation, !translation.isEmpty {
                 Text(translation).font(MusicTypography.subheadline)
@@ -358,31 +400,6 @@ private struct LyricRowContent: View {
             }
         }.frame(maxWidth: .infinity, alignment: right ? .trailing : .leading)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: active)
-    }
-}
-
-private struct BalancedTextLayout: Layout {
-    var enabled: Bool
-    var right: Bool
-    private func width(_ available: CGFloat, view: LayoutSubview) -> CGFloat {
-        guard enabled, view.sizeThatFits(.unspecified).width > available else { return available }
-        let height = view.sizeThatFits(ProposedViewSize(width: available, height: nil)).height
-        var low = available / 3, high = available
-        for _ in 0..<10 {
-            let mid = (low + high) / 2
-            if view.sizeThatFits(ProposedViewSize(width: mid, height: nil)).height <= height + 0.5 { high = mid } else { low = mid }
-        }
-        return high
-    }
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        guard let view = subviews.first else { return .zero }
-        let available = proposal.width ?? 320
-        return CGSize(width: available, height: view.sizeThatFits(ProposedViewSize(width: width(available, view: view), height: nil)).height)
-    }
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        guard let view = subviews.first else { return }
-        let measured = width(bounds.width, view: view)
-        view.place(at: CGPoint(x: right ? bounds.maxX - measured : bounds.minX, y: bounds.minY), anchor: .topLeading, proposal: ProposedViewSize(width: measured, height: bounds.height))
     }
 }
 
@@ -406,7 +423,6 @@ private struct KaraokeLine: View {
     var line: LyricLine
     var active: Bool
     var reduceMotion: Bool
-    var balanced: Bool
     var size: CGFloat
     var lineSpacing: CGFloat
     var right: Bool
@@ -417,7 +433,7 @@ private struct KaraokeLine: View {
         TimelineView(.animation(minimumInterval: reduceMotion ? 0.1 : nil,
                                 paused: !active || !player.isPlaying || scenePhase != .active || !presentation.isPresented)) { _ in
             let time = player.lyricPlaybackTime
-            LyricFlowLayout(balanced: balanced, lineSpacing: lineSpacing, right: right) {
+            LyricFlowLayout(lineSpacing: lineSpacing, right: right) {
                 ForEach(Array(line.words.enumerated()), id: \.offset) { index, word in
                     let nextStart = index + 1 < line.words.count ? line.words[index + 1].start : line.end
                     let end = word.end ?? nextStart
@@ -448,38 +464,32 @@ private struct KaraokeLine: View {
 }
 
 private struct LyricFlowLayout: Layout {
-    var balanced = false
     var lineSpacing: CGFloat = 5
     var right = false
     struct Cache {
         var width: CGFloat?
         var spacing: CGFloat = 0
-        var balanced = false
         var right = false
         var result: (CGSize, [CGPoint], [CGSize])?
     }
     func makeCache(subviews: Subviews) -> Cache { Cache() }
     func updateCache(_ cache: inout Cache, subviews: Subviews) { cache = Cache() }
     private func cachedLayout(width: CGFloat, subviews: Subviews, cache: inout Cache) -> (CGSize, [CGPoint], [CGSize]) {
-        if cache.width == width, cache.spacing == lineSpacing, cache.balanced == balanced,
+        if cache.width == width, cache.spacing == lineSpacing,
            cache.right == right, let result = cache.result { return result }
         let result = layout(width: width, subviews: subviews)
-        cache.width = width; cache.spacing = lineSpacing; cache.balanced = balanced
+        cache.width = width; cache.spacing = lineSpacing
         cache.right = right; cache.result = result
         return result
     }
     private func layout(width: CGFloat, subviews: Subviews) -> (CGSize, [CGPoint], [CGSize]) {
         let width = max(1, width)
         let intrinsic = subviews.map { $0.sizeThatFits(.unspecified) }
-        let measured = intrinsic.map(\.width)
-        let total = measured.reduce(0, +)
-        let longest = measured.max() ?? 0
-        let available = balanced && total > width ? min(width, max(longest, total / ceil(total / max(1, width)) + 12)) : width
         var positions: [CGPoint] = [], sizes: [CGSize] = []
         var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
         for index in subviews.indices {
             let size = intrinsic[index].width <= width ? intrinsic[index] : subviews[index].sizeThatFits(ProposedViewSize(width: width, height: nil))
-            if x > 0 && x + size.width > available { x = 0; y += rowHeight + lineSpacing; rowHeight = 0 }
+            if x > 0 && x + size.width > width { x = 0; y += rowHeight + lineSpacing; rowHeight = 0 }
             positions.append(CGPoint(x: x, y: y)); sizes.append(size)
             x += size.width; rowHeight = max(rowHeight, size.height)
         }

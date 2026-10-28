@@ -2,9 +2,9 @@ import XCTest
 @testable import Flamingo
 
 @MainActor final class TypographyTests: XCTestCase {
-    func testRetiringLyricWeightPreservesOtherUserSettings() {
+    func testRetiringUnusedFeaturesPreservesPlaybackSettings() {
         let defaults = AppPreferences.defaults
-        let keys = ["lyricWeight", "lyricBalance", "showVolume", "animatedBackground"]
+        let keys = ["lyricWeight", "lyricBalance", "animatedCovers", "artworkBlacklist", "artistSeparators", "showVolume", "animatedBackground", "appearance", "playerCorner", "hapticFeedback"]
         let saved = keys.map { defaults.object(forKey: $0) }
         defer {
             for (key, value) in zip(keys, saved) {
@@ -14,15 +14,30 @@ import XCTest
         }
         defaults.set("ExtraBold", forKey: "lyricWeight")
         defaults.set(true, forKey: "lyricBalance")
+        defaults.set(true, forKey: "animatedCovers")
+        defaults.set("Album", forKey: "artworkBlacklist")
+        defaults.set("/", forKey: "artistSeparators")
         defaults.set(false, forKey: "showVolume")
         defaults.set(false, forKey: "animatedBackground")
+        defaults.set("dark", forKey: "appearance")
+        defaults.set(50, forKey: "playerCorner")
+        defaults.set(false, forKey: "hapticFeedback")
         PlayerPreferences.register()
         XCTAssertNil(defaults.object(forKey: "lyricWeight"))
-        XCTAssertTrue(defaults.bool(forKey: "lyricBalance"))
-        XCTAssertFalse(defaults.bool(forKey: "showVolume"))
-        XCTAssertFalse(defaults.bool(forKey: "animatedBackground"))
+        XCTAssertNil(defaults.object(forKey: "lyricBalance"))
+        XCTAssertNil(defaults.object(forKey: "animatedCovers"))
+        XCTAssertNil(defaults.object(forKey: "artworkBlacklist"))
+        XCTAssertNil(defaults.object(forKey: "artistSeparators"))
+        XCTAssertNil(defaults.object(forKey: "showVolume"))
+        XCTAssertNil(defaults.object(forKey: "animatedBackground"))
+        XCTAssertNil(defaults.object(forKey: "appearance"))
+        XCTAssertNil(defaults.object(forKey: "playerCorner"))
+        XCTAssertFalse(defaults.bool(forKey: "hapticFeedback"))
         PlayerPreferences.register()
         XCTAssertNil(defaults.object(forKey: "lyricWeight"))
-        XCTAssertTrue(defaults.bool(forKey: "lyricBalance"))
+        XCTAssertNil(defaults.object(forKey: "lyricBalance"))
+        XCTAssertNil(defaults.object(forKey: "animatedCovers"))
+        XCTAssertNil(defaults.object(forKey: "artworkBlacklist"))
+        XCTAssertNil(defaults.object(forKey: "artistSeparators"))
     }
 }

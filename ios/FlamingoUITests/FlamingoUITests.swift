@@ -46,9 +46,15 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(confirm.waitForExistence(timeout: 5)); confirm.tap()
         XCTAssertFalse(app.descendants(matching: .any)["song-demo-0.wav"].exists)
         app.navigationBars.buttons.firstMatch.tap()
-        app.buttons["扫描媒体库"].tap()
+        app.buttons["tab-home"].tap()
+        app.buttons["设置"].tap()
+        let scanButton = app.buttons["scan-music"]
+        for _ in 0..<8 where !scanButton.isHittable { app.swipeUp() }
+        scanButton.tap()
         XCTAssertTrue(app.alerts["扫描完成"].waitForExistence(timeout: 20))
         app.alerts.buttons["好"].tap()
+        app.buttons["完成"].tap()
+        app.buttons["tab-library"].tap()
         app.buttons["library-songs"].tap()
         XCTAssertFalse(app.descendants(matching: .any)["song-demo-0.wav"].exists)
         app.navigationBars.buttons.firstMatch.tap()
@@ -142,8 +148,12 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["字体粗细"].exists)
         XCTAssertFalse(app.buttons["ExtraBold"].exists)
-        XCTAssertTrue(app.switches["平衡歌词换行"].exists)
-        XCTAssertTrue(app.switches["显示音量条"].exists)
+        XCTAssertFalse(app.switches["平衡歌词换行"].exists)
+        XCTAssertFalse(app.switches["动态专辑封面"].exists)
+        XCTAssertFalse(app.textFields["艺人拆分符号"].exists)
+        XCTAssertFalse(app.switches["显示音量条"].exists)
+        XCTAssertFalse(app.switches["播放背景动画"].exists)
+        XCTAssertFalse(app.staticTexts["显示模式"].exists)
     }
     func testCreatePlaylistWithDuplicateSongsAndRestoreAfterRelaunch() {
         app.buttons["tab-library"].tap()

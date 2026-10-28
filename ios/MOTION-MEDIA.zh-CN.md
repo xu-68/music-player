@@ -26,7 +26,7 @@ Reduce Motion 使用透明度过渡，不执行容器位移和共享封面变形
 
 ## 内部反馈和性能
 
-播放/暂停采用 SF Symbols 的 contentTransition，启用 Reduce Motion 时降级。按钮使用一致的轻量按压反馈；本轮没有增加触感反馈功能。封面在暂停时克制缩小，恢复时回弹；图片切换淡入淡出，视频未准备好显示时保留底下的静态封面。视频桥接只在播放意图或 URL 变化时调用 play/pause，不随每帧布局重复调用。
+播放/暂停采用 SF Symbols 的 contentTransition，启用 Reduce Motion 时降级。按钮使用一致的轻量按压反馈；本轮没有增加触感反馈功能。封面在暂停时克制缩小，恢复时回弹；图片切换淡入淡出。动态视频封面已按用户要求移除，封面统一使用静态图片。
 
 MiniPlayer 进度和当前逐字歌词在独立 TimelineView 中读取媒体时钟。隐藏、暂停或进入后台时停用对应时间线；歌词布局加入 Layout cache，复用测量/放置结果。已有低频背景动画继续复用。Info.plist 与 XcodeGen 配置同时启用 CADisableMinimumFrameDurationOnPhone；前景动画不固定锁在 60Hz，实际刷新率由系统、设备状态和负载决定。
 
@@ -49,7 +49,6 @@ MiniPlayer 进度和当前逐字歌词在独立 TimelineView 中读取媒体时�
 | Flamingo/RootView.swift | 顶层容器、共享封面、导航协调、MiniPlayer 进度与图标反馈 |
 | Flamingo/NowPlayingView.swift | 手势接入、封面目标测量、歌词可见性与布局缓存 |
 | Flamingo/PlayerStore.swift | 系统信息缓存、seek 校正、媒体服务重置与观察者生命周期 |
-| Flamingo/AnimatedArtwork.swift | 图片过渡、视频显示准备状态及播放调用去重 |
 | Flamingo/Design.swift | 按压动画参数及静态封面过渡 |
 | Flamingo/FlamingoApp.swift | 前后台系统播放信息同步 |
 | Flamingo/Info.plist、project.yml | ProMotion 配置 |

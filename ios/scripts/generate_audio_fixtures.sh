@@ -15,5 +15,3 @@ for CONFIG in 'wmav2:wma' 'vorbis:ogg' 'opus:opus' 'flac:flac' 'wavpack:wv'; do
 done
 ffmpeg -nostdin -hide_banner -loglevel error -y -f lavfi -i 'sine=frequency=880:sample_rate=48000:duration=0.2' \
   -metadata title='Alternate fixture' -metadata artist='Flamingo Tests' -c:a flac "$TARGET/alternate.flac"
-ffmpeg -nostdin -hide_banner -loglevel error -y -f lavfi -i 'color=c=red:s=64x64:r=24:d=0.25' \
-  -c:v h264_videotoolbox -allow_sw 1 -an "$TARGET/cover.mp4"

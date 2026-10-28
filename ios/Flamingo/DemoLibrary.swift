@@ -39,8 +39,6 @@ import UIKit
             queue.replace(with: snapshot.tracks.map(\.id))
             AppPreferences.defaults.set(try JSONEncoder().encode(queue), forKey: "playbackQueue")
             AppPreferences.defaults.set(0.0, forKey: "playbackPosition")
-            AppPreferences.defaults.set("dark", forKey: "appearance")
-            AppPreferences.defaults.set(false, forKey: "animatedBackground")
             AppPreferences.defaults.set(false, forKey: "autoScanMusic")
         } catch { assertionFailure("UI fixture creation failed: \(error)") }
     }

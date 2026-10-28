@@ -45,7 +45,7 @@ struct ArtistDetailView: View {
     let artist: String
     @Environment(LibraryStore.self) private var library
     @Environment(PlayerStore.self) private var player
-    private var catalog: ArtistCatalog { ArtistCatalog.build(library.tracks, artist: artist, separators: AppPreferences.defaults.string(forKey: "artistSeparators") ?? ",") }
+    private var catalog: ArtistCatalog { ArtistCatalog.build(library.tracks, artist: artist, separators: ",") }
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 22) {

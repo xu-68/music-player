@@ -30,11 +30,10 @@ enum LibraryPaths {
     }
     static let artwork = root.appending(path: "Artwork", directoryHint: .isDirectory)
     static let lyrics = root.appending(path: "Lyrics", directoryHint: .isDirectory)
-    static let video = root.appending(path: "Video", directoryHint: .isDirectory)
     static let decoded = root.appending(path: "Decoded", directoryHint: .isDirectory)
     static let database = root.appending(path: "Library.json")
     static func prepare() throws {
-        for url in [root, audio, artwork, lyrics, video, decoded] {
+        for url in [root, audio, artwork, lyrics, decoded] {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }
         let legacy = root.appending(path: "Audio", directoryHint: .isDirectory)
@@ -273,8 +272,7 @@ actor AudioImporter {
     var tracks: [Track] { snapshot.tracks.filter { !snapshot.hiddenDirectories.contains($0.sourceDirectory ?? "") } }
     var playlists: [Playlist] { snapshot.playlists }
     func artists(for track: Track) -> [String] {
-        let separators = AppPreferences.defaults.string(forKey: "artistSeparators") ?? ","
-        let values = track.artist.components(separatedBy: CharacterSet(charactersIn: separators))
+        let values = track.artist.components(separatedBy: CharacterSet(charactersIn: ","))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         return values.isEmpty ? [track.artist] : values
     }
@@ -316,7 +314,7 @@ actor AudioImporter {
         importing = true
         defer { importing = false; importProgress = "" }
         var report = ImportReport()
-        let audio = urls.filter { AudioImporter.extensions.contains($0.pathExtension.lowercased()) && $0.deletingLastPathComponent().lastPathComponent != "anim" }
+        let audio = urls.filter { AudioImporter.extensions.contains($0.pathExtension.lowercased()) }
         for (index, url) in audio.enumerated() {
             importProgress = "\(index + 1) / \(audio.count) · \(url.lastPathComponent)"
             do {
@@ -337,7 +335,6 @@ actor AudioImporter {
                         track.id = existing.id; track.addedAt = existing.addedAt
                         track.isFavorite = existing.isFavorite
                         track.lyricsFilename = existing.lyricsFilename; track.manualLyrics = existing.manualLyrics
-                        track.videoFilename = existing.videoFilename
                         if track.artworkFilename == nil { track.artworkFilename = existing.artworkFilename }
                         snapshot.tracks[i] = track
                     } else { track = existing }
@@ -353,11 +350,7 @@ actor AudioImporter {
                     if let sidecar = candidates.first(where: { $0.pathExtension.lowercased() == ext }),
                        await attachLyrics(sidecar, for: track.id) { break }
                 }
-                if let video = urls.first(where: {
-                    ["mp4", "mov", "m4v"].contains($0.pathExtension.lowercased()) &&
-                    ($0.deletingPathExtension().lastPathComponent == stem && $0 != url && $0.deletingLastPathComponent().standardizedFileURL == sourceDirectory ||
-                     $0.deletingLastPathComponent().lastPathComponent == "anim" && $0.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL == sourceDirectory && $0.deletingPathExtension().lastPathComponent == Self.safeAlbumName(track.album))
-                }) { await importVideo(video, for: track.id) }
+
             } catch { report.failures.append("\(url.lastPathComponent)：\(error.localizedDescription)") }
         }
         for sidecar in urls where ["ttml", "xml", "lrc"].contains(sidecar.pathExtension.lowercased()) {
@@ -380,9 +373,6 @@ actor AudioImporter {
         await saveNow()
         if !quiet || !report.failures.isEmpty { importMessage = report.message }
     }
-    static func safeAlbumName(_ album: String) -> String {
-        album.components(separatedBy: CharacterSet(charactersIn: "/\\:*?\"<>|")).joined(separator: "_").trimmingCharacters(in: .whitespacesAndNewlines)
-    }
     func scanMusic(quiet: Bool = false) async {
         guard ready, !importing else { return }
         do {
@@ -390,23 +380,6 @@ actor AudioImporter {
             let files = try await importer.managedFiles()
             await importFiles(files, quiet: quiet, managed: true)
         } catch { errorMessage = "扫描 Music 文件夹失败：\(error.localizedDescription)" }
-    }
-    func importVideo(_ url: URL, for id: UUID) async {
-        let access = url.startAccessingSecurityScopedResource()
-        defer { if access { url.stopAccessingSecurityScopedResource() } }
-        do {
-            let asset = AVURLAsset(url: url)
-            guard !(try await asset.loadTracks(withMediaType: .video)).isEmpty else { throw CocoaError(.fileReadCorruptFile) }
-            let name = id.uuidString + "." + url.pathExtension.lowercased()
-            let target = LibraryPaths.video.appending(path: name)
-            if target != url {
-                let staging = LibraryPaths.video.appending(path: UUID().uuidString)
-                try FileManager.default.copyItem(at: url, to: staging)
-                try? FileManager.default.removeItem(at: target)
-                try FileManager.default.moveItem(at: staging, to: target)
-            }
-            if let i = snapshot.tracks.firstIndex(where: { $0.id == id }) { snapshot.tracks[i].videoFilename = name; scheduleSave() }
-        } catch { errorMessage = "动态封面导入失败：\(error.localizedDescription)" }
     }
     func importLyrics(_ url: URL, for id: UUID) async {
         if !(await attachLyrics(url, for: id, manually: true)) { errorMessage = "未能解析歌词，请选择 UTF-8 或 UTF-16 编码的 LRC / TTML 文件。" }
@@ -496,7 +469,6 @@ actor AudioImporter {
             try? FileManager.default.removeItem(at: LibraryPaths.artwork.appending(path: name))
         }
         if let name = track.lyricsFilename { try? FileManager.default.removeItem(at: LibraryPaths.lyrics.appending(path: name)) }
-        if let name = track.videoFilename { try? FileManager.default.removeItem(at: LibraryPaths.video.appending(path: name)) }
         if let name = track.decodedFilename, !snapshot.tracks.contains(where: { $0.decodedFilename == name }) {
             try? FileManager.default.removeItem(at: LibraryPaths.decoded.appending(path: name))
         }

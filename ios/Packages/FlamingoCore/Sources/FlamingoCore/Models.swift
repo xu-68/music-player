@@ -21,7 +21,6 @@ public struct Track: Codable, Identifiable, Hashable, Sendable {
     public var sourceByteCount: Int?
     public var sourceFolderID: UUID?
     public var sourceDirectory: String?
-    public var videoFilename: String?
     public var decodedFilename: String?
     public var codec: String?
     public var sampleRate: Double?

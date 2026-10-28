@@ -13,13 +13,15 @@ struct RootView: View {
     @Environment(PlayerStore.self) private var player
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
     @State private var tab = MusicTab.home
     @State private var presentation = PlayerPresentation()
     @State private var miniFrame: CGRect = .zero
     @State private var miniArtworkFrame: CGRect = .zero
     @State private var playerArtworkFrame: CGRect = .zero
+    @State private var miniMetadata = PlayerMetadataFrames()
+    @State private var expandedMetadata = PlayerMetadataFrames()
     @State private var pendingNavigation: LibraryDestination?
-    @AppStorage("playerCorner") private var playerCorner = 30.0
     @State private var settings = false
     @State private var libraryPath: [LibraryDestination] = []
 
@@ -48,17 +50,17 @@ struct RootView: View {
         GeometryReader { geometry in
         let fullFrame = CGRect(x: 0, y: -geometry.safeAreaInsets.top, width: geometry.size.width,
                                height: geometry.size.height + geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom)
-        let source = miniFrame.isEmpty ? CGRect(x: 20, y: geometry.size.height - 128, width: max(1, geometry.size.width - 40), height: 50) : miniFrame
+        let source = miniFrame.isEmpty ? CGRect(x: 12, y: geometry.size.height - 130, width: max(1, geometry.size.width - 24), height: 58) : miniFrame
         ZStack(alignment: .bottom) {
             Color(uiColor: .systemBackground).ignoresSafeArea()
             TabView(selection: $tab) {
-                NavigationStack { HomeView(importAction: { Task { await library.scanMusic() } }, settingsAction: { settings = true }) }
+                NavigationStack { HomeView(settingsAction: { settings = true }) }
                     .safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: player.current == nil ? 78 : 146).allowsHitTesting(false) }
                     .toolbar(.hidden, for: .tabBar)
                     .tabItem { Label(MusicTab.home.rawValue, systemImage: MusicTab.home.symbol).accessibilityIdentifier("tab-home") }
                     .tag(MusicTab.home)
                 NavigationStack(path: $libraryPath) {
-                    LibraryView(importAction: { Task { await library.scanMusic() } })
+                    LibraryView()
                         .navigationDestination(for: LibraryDestination.self) { destination in
                             switch destination {
                             case .artist(let name): ArtistDetailView(artist: name)
@@ -84,22 +86,33 @@ struct RootView: View {
             if player.current != nil {
                 NowPlayingView(presentation: presentation,
                                sharedArtworkAvailable: !playerArtworkFrame.isEmpty && !miniArtworkFrame.isEmpty && !reduceMotion,
+                               sharedMetadataAvailable: miniMetadata.isComplete && expandedMetadata.isComplete && !reduceMotion,
                                safeArea: geometry.safeAreaInsets,
                                transitionTravel: max(1, source.minY - fullFrame.minY), close: closePlayer)
                     .environment(presentation)
                     .frame(width: fullFrame.width, height: fullFrame.height)
                     .modifier(PlayerContainerTransform(progress: presentation.progress, motion: presentation,
                                                        collapsed: source, expanded: fullFrame,
-                                                       corner: CGFloat(max(25, playerCorner)), reduceMotion: reduceMotion))
+                                                       reduceMotion: reduceMotion))
                     .allowsHitTesting(presentation.isPresented && pendingNavigation == nil).accessibilityHidden(!presentation.isPresented)
                     .zIndex(2)
                 if !playerArtworkFrame.isEmpty, !miniArtworkFrame.isEmpty, !reduceMotion {
-                    AnimatedAlbumArtwork(track: player.current, active: presentation.isPresented && player.isPlaying)
+                    ArtworkView(track: player.current, radius: 0)
                         .modifier(PlayerArtworkTransform(progress: presentation.progress, collapsed: miniArtworkFrame,
                                                          expanded: playerArtworkFrame.offsetBy(dx: fullFrame.minX, dy: fullFrame.minY)))
                         .animation(PlayerMotion.artwork, value: player.isPlaying)
                         .animation(PlayerMotion.panel, value: playerArtworkFrame)
                         .allowsHitTesting(false).accessibilityHidden(true).zIndex(3)
+                }
+                if miniMetadata.isComplete, expandedMetadata.isComplete, !reduceMotion {
+                    ZStack(alignment: .topLeading) {
+                        Text(player.current?.title ?? "")
+                            .modifier(PlayerTextTransform(progress: presentation.progress, collapsed: miniMetadata.title,
+                                expanded: expandedMetadata.title.offsetBy(dx: fullFrame.minX, dy: fullFrame.minY), dark: colorScheme == .dark))
+                        Text(player.current?.artist ?? "")
+                            .modifier(PlayerTextTransform(progress: presentation.progress, collapsed: miniMetadata.artist,
+                                expanded: expandedMetadata.artist.offsetBy(dx: fullFrame.minX, dy: fullFrame.minY), artist: true, dark: colorScheme == .dark))
+                    }.allowsHitTesting(false).accessibilityHidden(true).zIndex(4)
                 }
             }
         }
@@ -107,6 +120,8 @@ struct RootView: View {
         .onPreferenceChange(MiniPlayerFrameKey.self) { if !$0.isEmpty { miniFrame = $0 } }
         .onPreferenceChange(MiniArtworkFrameKey.self) { if !$0.isEmpty { miniArtworkFrame = $0 } }
         .onPreferenceChange(PlayerArtworkFrameKey.self) { playerArtworkFrame = $0 }
+        .onPreferenceChange(MiniMetadataFrameKey.self) { miniMetadata.merge($0) }
+        .onPreferenceChange(ExpandedMetadataFrameKey.self) { expandedMetadata.merge($0) }
         .onChange(of: geometry.size) { _, _ in
             if presentation.phase == .dragging { presentation.settle(expanded: true, reduceMotion: reduceMotion) }
         }
@@ -230,8 +245,11 @@ struct MiniPlayer: View {
                         } }
                     VStack(alignment: .leading, spacing: 0) {
                         Text(player.current?.title ?? "").font(MusicTypography.compactHeadline)
+                            .background { PlayerMetadataMeasurement(mini: true, title: true) }
                         Text(player.current?.artist ?? "").font(MusicTypography.caption)
+                            .background { PlayerMetadataMeasurement(mini: true, title: false) }
                     }.lineLimit(1)
+                        .modifier(MiniArtworkVisibility(progress: presentationProgress, reduceMotion: reduceMotion))
                         .contentTransition(.opacity)
                         .animation(reduceMotion ? nil : PlayerMotion.panel, value: player.current?.id)
                         .foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)

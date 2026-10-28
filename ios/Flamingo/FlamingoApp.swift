@@ -9,7 +9,6 @@ enum AppPreferences {
     @State private var library: LibraryStore
     @State private var player: PlayerStore
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("appearance", store: AppPreferences.defaults) private var appearance = "system"
 
     init() {
         PlayerPreferences.register()
@@ -25,7 +24,6 @@ enum AppPreferences {
             RootView().environment(library).environment(player).tint(MusicDesign.accent)
                 .font(MusicTypography.body)
                 .defaultAppStorage(AppPreferences.defaults)
-                .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
                 .task { if AppPreferences.defaults.bool(forKey: "autoScanMusic") { await library.scanMusic(quiet: true) } }
                 .onChange(of: scenePhase) { _, phase in
                     if phase != .active { PlayerHaptics.shared.releaseResources() }

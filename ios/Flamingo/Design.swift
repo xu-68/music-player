@@ -160,13 +160,12 @@ struct FlowingArtworkBackground: View {
     var active: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("animatedBackground") private var animated = true
     @State private var colors: [Color] = [.init(red: 0.3, green: 0.35, blue: 0.38), .init(red: 0.15, green: 0.2, blue: 0.23), .init(red: 0.4, green: 0.33, blue: 0.3)]
     @State private var elapsed: TimeInterval = 0
     @State private var lastTick: Date?
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !active || reduceMotion || !animated || scenePhase != .active)) { context in
-            let phase = reduceMotion || !animated ? 0 : elapsed / 12
+        TimelineView(.animation(minimumInterval: 1.0 / 20, paused: !active || reduceMotion || scenePhase != .active)) { context in
+            let phase = reduceMotion ? 0 : elapsed / 12
             GeometryReader { proxy in
                 // Extend the entire render surface beyond the viewport before blurring.
                 // Transparent blur edges stay outside the screen instead of forming seams.
@@ -189,7 +188,7 @@ struct FlowingArtworkBackground: View {
                     .overlay { Color.black.opacity(0.2) }.clipped()
             }
             .onChange(of: context.date) { previous, now in
-                if active && animated && !reduceMotion && scenePhase == .active {
+                if active && !reduceMotion && scenePhase == .active {
                     // Clamp the interval so resuming never jumps to a new mesh position.
                     elapsed += min(0.1, max(0, now.timeIntervalSince(lastTick ?? previous)))
                 }
@@ -261,6 +260,7 @@ private enum ArtworkPalette {
 
 struct AirPlayButton: UIViewRepresentable {
     var white = false
+    var hidesGlyph = false
     func makeUIView(context: Context) -> AVRoutePickerView {
         let view = AVRoutePickerView()
         view.prioritizesVideoDevices = false
@@ -268,8 +268,8 @@ struct AirPlayButton: UIViewRepresentable {
         return view
     }
     func updateUIView(_ view: AVRoutePickerView, context: Context) {
-        view.tintColor = white ? .white.withAlphaComponent(0.75) : .label
-        view.activeTintColor = UIColor(MusicDesign.accent)
+        view.tintColor = hidesGlyph ? .clear : white ? .white.withAlphaComponent(0.75) : .label
+        view.activeTintColor = hidesGlyph ? .clear : UIColor(MusicDesign.accent)
     }
 }
 
