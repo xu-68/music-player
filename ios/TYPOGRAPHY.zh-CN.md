@@ -13,3 +13,7 @@ MusicTypography（Design.swift）集中定义大标题、标题、歌曲名称�
 封面取色和既有背景动画继续复用，颜色仅在封面变化时计算，并平滑切换。
 
 新增 TypographyTests 验证旧设置清理不会改写其他设置；UI 用例覆盖手动浏览、恢复跟随和字体菜单移除。Windows 的结构校验不等于 Xcode 类型检查或运行测试。需在 macOS 运行 ios/scripts/build.sh test，并在真机检查中英日混排、长行、重叠对唱、暂停恢复、拖动进度、辅助功能字号和帧率。
+
+本版本已完成 macOS/Xcode 归档和 56 项 Core/原生/UI 回归，0 失败。当前验证依据见 VALIDATION.zh-CN.md；真机字体观感、帧率与硬件场景仍需实测。
+
+最终真机交付：IPA 提交 `73a74c55201173702a78e0ded644f8c586807e3e`，设备归档与包校验通过；最终封面微调版模拟器回归仍在 https://github.com/xu-68/music-player/actions/runs/40710233062 运行。按用户要求先交付真机测试，不等待该任务。此前 56 项通过对应 cc13c27，详见 VALIDATION.zh-CN.md。

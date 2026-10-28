@@ -25,3 +25,7 @@
 本次交付必须以对应提交的 macOS/Xcode 构建和测试结果为准；此前版本的通过记录不代表本版通过。Windows 静态校验仅检查语法、工程和资源。最终本地交付记录应包含构建提交、Actions run、测试结论、IPA SHA-256 和签名状态。
 
 未签名 IPA 需要由用户签名后安装；真机触觉、硬件音量键、耳机、AirPlay、锁屏和实际帧率必须在真实设备上验证。
+
+当前已验证：提交 `cc13c27ece6a41f71a82858b37ee00fdeecf4a5b`，构建 https://github.com/xu-68/music-player/actions/runs/40706373884 ，ARM64 设备归档和 56 项测试全部通过，0 失败。最终包 SHA-256 及真机限制见 VALIDATION.zh-CN.md。
+
+最终真机交付：IPA 提交 `73a74c55201173702a78e0ded644f8c586807e3e`，设备归档与包校验通过；最终封面微调版模拟器回归仍在 https://github.com/xu-68/music-player/actions/runs/40710233062 运行。按用户要求先交付真机测试，不等待该任务。此前 56 项通过对应 cc13c27，详见 VALIDATION.zh-CN.md。

@@ -56,7 +56,7 @@ InteractionFeedback.swift 中 PlayerHaptics 复用一个 soft UIImpactFeedbackGe
 
 ## 验证边界
 
-Windows 已通过 Swift tree-sitter 语法、工程、资源、plist 和差异检查。XCTest/XCUITest 已加入工程但未运行，尚未通过 Xcode 类型检查、模拟器或真机验收。不能把静态检查描述为震动强度、动画帧率或硬件同步已经验证。
+Windows 静态检查、Xcode 16.4 设备归档以及 56 项 Core/原生/UI 测试均通过，详见 VALIDATION.zh-CN.md 与构建 https://github.com/xu-68/music-player/actions/runs/40706373884 。其中滑块生命周期单元测试 5 项通过，进度拖动与重新展开的 UI 回归通过。未进行真实设备触觉、硬件同步或帧率验收，不能把模拟器结果描述为实际震感已经验证。
 
 在 macOS 执行 `bash ios/scripts/build.sh test`，随后在真实 iPhone 检查：快速反复按住与松开、拖出区域、两个手指、两端抖动、暂停与播放时 seek、切歌/收起/后台取消、Reduce Motion、VoiceOver、硬件音量键、蓝牙/AirPlay，以及系统触觉和应用触觉分别关闭的组合。实际触觉强度、被动观察器与原生音量控件的兼容性必须实机确认。
 
@@ -65,3 +65,5 @@ Windows 已通过 Swift tree-sitter 语法、工程、资源、plist 和差异�
 - [MPVolumeView 的公开外观 API](https://developer.apple.com/documentation/mediaplayer/mpvolumeview)
 - [UIFeedbackGenerator.prepare](https://developer.apple.com/documentation/uikit/uifeedbackgenerator/prepare())
 - [Apple 触觉设计指南](https://developer.apple.com/design/human-interface-guidelines/playing-haptics)
+
+最终真机交付：IPA 提交 `73a74c55201173702a78e0ded644f8c586807e3e`，设备归档与包校验通过；最终封面微调版模拟器回归仍在 https://github.com/xu-68/music-player/actions/runs/40710233062 运行。按用户要求先交付真机测试，不等待该任务。此前 56 项通过对应 cc13c27，详见 VALIDATION.zh-CN.md。
