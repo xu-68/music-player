@@ -35,6 +35,8 @@ struct AdaptiveProgressSlider: UIViewRepresentable {
         if changedTrack || !available && control.phase != .idle { control.invalidateInteraction(notify: false) }
         if available && !control.isEnabled { PlayerHaptics.shared.prepareScrubbing() }
         control.isEnabled = available
+        control.isAccessibilityElement = available
+        control.accessibilityElementsHidden = !available
         if control.phase != .pressed && control.phase != .dragging { control.displayedValue = value }
         control.refreshAccessibility()
     }
@@ -226,6 +228,7 @@ struct AdaptiveSystemVolumeSlider: UIViewRepresentable {
     func makeUIView(context: Context) -> AdaptiveVolumeContainer { AdaptiveVolumeContainer() }
     func updateUIView(_ view: AdaptiveVolumeContainer, context: Context) {
         view.isUserInteractionEnabled = enabled
+        view.accessibilityElementsHidden = !enabled
         view.volume.isUserInteractionEnabled = enabled
         if view.trackID != trackID || !enabled && view.phase != .idle { view.cancelInteraction() }
         view.trackID = trackID

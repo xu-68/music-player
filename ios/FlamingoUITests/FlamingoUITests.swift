@@ -13,6 +13,7 @@ final class FlamingoUITests: XCTestCase {
     }
     func testRedesignedPlayerWhileAudioIsAdvancing() {
         app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
         let toggle = app.buttons["player-play-pause"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         toggle.tap()
@@ -68,6 +69,7 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["资料库"].waitForExistence(timeout: 5))
         capture("02-library", verifyingDock: true)
         app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
         XCTAssertTrue(app.buttons["player-play-pause"].waitForExistence(timeout: 5))
         capture("03-now-playing")
         app.buttons["show-lyrics"].tap()
@@ -86,6 +88,7 @@ final class FlamingoUITests: XCTestCase {
     }
     func testPlaybackAndSeekFromLyrics() {
         app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
         let toggle = app.buttons["player-play-pause"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 5))
         toggle.tap()
@@ -121,6 +124,7 @@ final class FlamingoUITests: XCTestCase {
     }
     func testLyricsManualBrowsingAndTypographySettings() {
         app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
         app.buttons["show-lyrics"].tap()
         let lyrics = app.scrollViews["lyrics-scroll"]
         XCTAssertTrue(lyrics.waitForExistence(timeout: 5))
@@ -164,6 +168,7 @@ final class FlamingoUITests: XCTestCase {
     }
     func testSleepTimerModesAndSettings() {
         app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
         app.buttons["更多播放选项"].tap()
         app.buttons["睡眠定时"].tap()
         let start = app.buttons["start-sleep-timer"]
@@ -190,6 +195,7 @@ final class FlamingoUITests: XCTestCase {
     }
     func testPlaybackPositionSurvivesAppRestart() {
         app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
         app.buttons["show-lyrics"].tap()
         let line = app.buttons["lyric-1"]
         for _ in 0..<4 where !line.isHittable { app.scrollViews["lyrics-scroll"].swipeUp() }
@@ -198,6 +204,7 @@ final class FlamingoUITests: XCTestCase {
         XCUIDevice.shared.press(.home)
         app.terminate(); app.launchArguments = ["--ui-testing"]; app.launch()
         XCTAssertTrue(app.buttons["mini-player"].waitForExistence(timeout: 10)); app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
         let progress = app.descendants(matching: .any)["playback-progress"].firstMatch
         let restored = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
             (progress.value as? String ?? "").hasPrefix("0:05")
@@ -205,7 +212,10 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 5), .completed)
     }
     func testOpenCurrentAlbumFromPlayer() {
-        app.buttons["mini-player"].tap(); app.buttons["更多播放选项"].tap()
+        app.buttons["mini-player"].tap()
+        waitForExpandedPlayer()
+        app.buttons["更多播放选项"].tap()
+        XCTAssertTrue(app.buttons["前往专辑"].waitForExistence(timeout: 5))
         app.buttons["前往专辑"].tap()
         XCTAssertTrue(app.navigationBars["沿岸"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["mini-player"].exists)
@@ -217,6 +227,7 @@ final class FlamingoUITests: XCTestCase {
             let originalFrame = app.buttons["mini-player"].frame
             for _ in 0..<3 {
                 app.buttons["mini-player"].tap()
+                waitForExpandedPlayer()
                 XCTAssertTrue(app.buttons["player-play-pause"].waitForExistence(timeout: 5))
                 waitForExpandedPlayer()
                 let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3))
@@ -238,7 +249,7 @@ final class FlamingoUITests: XCTestCase {
         miniToggle.tap()
         let playing = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "暂停"), object: miniToggle)
         XCTAssertEqual(XCTWaiter.wait(for: [playing], timeout: 8), .completed)
-        XCTAssertFalse(app.buttons["close-player"].exists, "The transport button must not expand the player")
+        XCTAssertFalse(app.buttons["close-player"].isHittable, "The transport button must not expand the player")
         miniToggle.tap()
         app.buttons["mini-player"].tap()
         waitForExpandedPlayer()
@@ -274,7 +285,11 @@ final class FlamingoUITests: XCTestCase {
         waitForExpandedPlayer()
         progress.coordinate(withNormalizedOffset: CGVector(dx: 0.25, dy: 0.5)).tap()
         let soughtAgain = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
-            (progress.value as? String ?? "").hasPrefix("0:09，")
+            // Touch coordinates are rounded to device pixels; a quarter of
+            // the track can land just below nine seconds before formatting.
+            let value = (progress.value as? String ?? "").components(separatedBy: "，")[0]
+            let parts = value.split(separator: ":").compactMap { Double($0) }
+            return parts.count == 2 && abs(parts[0] * 60 + parts[1] - 9) <= 1
         }, object: progress)
         XCTAssertEqual(XCTWaiter.wait(for: [soughtAgain], timeout: 5), .completed)
         capture("19-adaptive-scrubber-restored")

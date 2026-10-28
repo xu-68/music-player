@@ -25,6 +25,7 @@ struct NowPlayingView: View {
         GeometryReader { proxy in
             let landscape = proxy.size.width > proxy.size.height
             ZStack {
+                Color.black.ignoresSafeArea()
                 FlowingArtworkBackground(track: player.current, active: player.isPlaying && presentation.isPresented)
                 VStack(spacing: 0) {
                     header.padding(.bottom, 4)
@@ -52,6 +53,7 @@ struct NowPlayingView: View {
                 }.padding(.top, safeArea.top + 8).padding(.bottom, safeArea.bottom)
                     .frame(maxWidth: 1000).frame(maxWidth: .infinity)
                     .modifier(PlayerControlsReveal(progress: presentation.progress))
+                    .accessibilityHidden(!presentation.isPresented)
             }.coordinateSpace(name: "player-content")
                 .animation(reduceMotion ? nil : PlayerMotion.panel, value: panel)
                 .foregroundStyle(.white).environment(\.colorScheme, .dark)
@@ -101,12 +103,17 @@ struct NowPlayingView: View {
                 Group {
                     if reduceMotion {
                         AnimatedAlbumArtwork(track: player.current, active: player.isPlaying && presentation.isPresented)
-                    } else { Color.clear }
+                    } else {
+                        ArtworkView(track: player.current, radius: 16)
+                            .opacity(presentation.phase == .expanded ? 1 : 0)
+                    }
                 }
                 .frame(width: side, height: side)
                 .background { GeometryReader { cover in
                     Color.clear.preference(key: PlayerArtworkFrameKey.self, value: cover.frame(in: .named("player-content")))
                 } }
+                .scaleEffect(reduceMotion || player.isPlaying ? 1 : 0.94)
+                .animation(reduceMotion ? nil : PlayerMotion.artwork, value: player.isPlaying)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .contentShape(Rectangle()).gesture(dismissGesture)
             }
@@ -121,7 +128,7 @@ struct NowPlayingView: View {
             if panel != .artwork {
                 ArtworkView(track: player.current, radius: 8)
                     .frame(width: 68, height: 68)
-                    .opacity(reduceMotion ? 1 : 0)
+                    .opacity(reduceMotion || presentation.phase == .expanded ? 1 : 0)
                     .background { GeometryReader { cover in
                         Color.clear.preference(key: PlayerArtworkFrameKey.self, value: cover.frame(in: .named("player-content")))
                     } }

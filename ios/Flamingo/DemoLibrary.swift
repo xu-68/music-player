@@ -35,6 +35,10 @@ import UIKit
             snapshot.playlists = [.init(name: "慢慢听", trackIDs: snapshot.tracks.map(\.id))]
             try JSONEncoder().encode(snapshot).write(to: LibraryPaths.database, options: .atomic)
             AppPreferences.defaults.set(snapshot.tracks.first?.id.uuidString, forKey: "lastTrack")
+            var queue = PlaybackQueue()
+            queue.replace(with: snapshot.tracks.map(\.id))
+            AppPreferences.defaults.set(try JSONEncoder().encode(queue), forKey: "playbackQueue")
+            AppPreferences.defaults.set(0.0, forKey: "playbackPosition")
             AppPreferences.defaults.set("dark", forKey: "appearance")
             AppPreferences.defaults.set(false, forKey: "animatedBackground")
             AppPreferences.defaults.set(false, forKey: "autoScanMusic")

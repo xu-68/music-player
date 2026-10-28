@@ -99,7 +99,7 @@ struct RootView: View {
                     AnimatedAlbumArtwork(track: player.current, active: presentation.isPresented && player.isPlaying)
                         .modifier(PlayerArtworkTransform(progress: presentation.progress, collapsed: miniArtworkFrame,
                                                          expanded: playerArtworkFrame.offsetBy(dx: fullFrame.minX, dy: fullFrame.minY),
-                                                         paused: !player.isPlaying))
+                                                         paused: !player.isPlaying && playerArtworkFrame.width > 100))
                         .animation(PlayerMotion.artwork, value: player.isPlaying)
                         .animation(PlayerMotion.panel, value: playerArtworkFrame)
                         .allowsHitTesting(false).accessibilityHidden(true).zIndex(3)
