@@ -6,6 +6,7 @@ private enum PlayerPanel { case artwork, lyrics, queue }
 
 struct NowPlayingView: View {
     var presentation: PlayerPresentation
+    var sharedArtworkAvailable: Bool
     var safeArea: EdgeInsets
     var transitionTravel: CGFloat
     var close: () -> Void
@@ -105,7 +106,7 @@ struct NowPlayingView: View {
                         AnimatedAlbumArtwork(track: player.current, active: player.isPlaying && presentation.isPresented)
                     } else {
                         ArtworkView(track: player.current, radius: 16)
-                            .opacity(presentation.phase == .expanded ? 1 : 0)
+                            .opacity(presentation.phase == .expanded && !sharedArtworkAvailable ? 1 : 0)
                     }
                 }
                 .frame(width: side, height: side)
@@ -128,7 +129,7 @@ struct NowPlayingView: View {
             if panel != .artwork {
                 ArtworkView(track: player.current, radius: 8)
                     .frame(width: 68, height: 68)
-                    .opacity(reduceMotion || presentation.phase == .expanded ? 1 : 0)
+                    .opacity(reduceMotion || presentation.phase == .expanded && !sharedArtworkAvailable ? 1 : 0)
                     .background { GeometryReader { cover in
                         Color.clear.preference(key: PlayerArtworkFrameKey.self, value: cover.frame(in: .named("player-content")))
                     } }

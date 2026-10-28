@@ -86,7 +86,9 @@ struct RootView: View {
             }.opacity(1 - presentation.progress)
                 .accessibilityHidden(presentation.isPresented).allowsHitTesting(!presentation.isPresented).zIndex(1)
             if player.current != nil {
-                NowPlayingView(presentation: presentation, safeArea: geometry.safeAreaInsets,
+                NowPlayingView(presentation: presentation,
+                               sharedArtworkAvailable: !playerArtworkFrame.isEmpty && !miniArtworkFrame.isEmpty && !reduceMotion,
+                               safeArea: geometry.safeAreaInsets,
                                transitionTravel: max(1, source.minY - fullFrame.minY), close: closePlayer)
                     .environment(presentation)
                     .frame(width: fullFrame.width, height: fullFrame.height)
@@ -98,8 +100,7 @@ struct RootView: View {
                 if !playerArtworkFrame.isEmpty, !miniArtworkFrame.isEmpty, !reduceMotion {
                     AnimatedAlbumArtwork(track: player.current, active: presentation.isPresented && player.isPlaying)
                         .modifier(PlayerArtworkTransform(progress: presentation.progress, collapsed: miniArtworkFrame,
-                                                         expanded: playerArtworkFrame.offsetBy(dx: fullFrame.minX, dy: fullFrame.minY),
-                                                         paused: !player.isPlaying && playerArtworkFrame.width > 100))
+                                                         expanded: playerArtworkFrame.offsetBy(dx: fullFrame.minX, dy: fullFrame.minY)))
                         .animation(PlayerMotion.artwork, value: player.isPlaying)
                         .animation(PlayerMotion.panel, value: playerArtworkFrame)
                         .allowsHitTesting(false).accessibilityHidden(true).zIndex(3)

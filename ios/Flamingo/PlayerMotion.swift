@@ -133,13 +133,11 @@ struct PlayerArtworkTransform: AnimatableModifier {
     var progress: CGFloat
     var collapsed: CGRect
     var expanded: CGRect
-    var paused: Bool
     var animatableData: CGFloat { get { progress } set { progress = newValue } }
     func body(content: Content) -> some View {
         let rect = interpolatedRect(collapsed, expanded, progress: progress)
         content.frame(width: rect.width, height: rect.height)
             .clipShape(RoundedRectangle(cornerRadius: 5 + 11 * progress, style: .continuous))
-            .scaleEffect(paused ? 1 - 0.06 * progress : 1)
             .opacity(progress > 0 ? 1 : 0)
             .position(x: rect.midX, y: rect.midY)
     }
