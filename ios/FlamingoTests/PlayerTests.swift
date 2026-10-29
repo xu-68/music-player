@@ -140,6 +140,30 @@ import XCTest
         XCTAssertTrue(MPRemoteCommandCenter.shared().nextTrackCommand.isEnabled)
     }
 
+    func testRapidSeeksKeepLatestAudioAndLyricPosition() async {
+        player.play(track, in: [track])
+        player.pause(immediate: true)
+        let initialRevision = player.seekRevision
+        for target in [1.6, 0.2, 1.3, 0.7] { player.seek(to: target) }
+        XCTAssertEqual(player.lyricPlaybackTime, 0.7, accuracy: 0.01)
+        let settled = await until { self.player.seekRevision > initialRevision + 4 }
+        XCTAssertTrue(settled)
+        player.synchronizeSystemPlayback()
+        XCTAssertEqual(player.elapsed, 0.7, accuracy: 0.08)
+        XCTAssertEqual(player.lyricPlaybackTime, player.elapsed, accuracy: 0.02)
+        let lyrics = LyricsParser.parse("[00:00.00]First\n[00:00.50]Second\n[00:01.00]Third")
+        XCTAssertEqual(LyricsParser.activeIndex(in: lyrics, at: player.lyricPlaybackTime), 1)
+        XCTAssertEqual(LyricsParser.activeIndices(in: lyrics, at: player.lyricPlaybackTime), Set([1]))
+        // Seek backwards across a line boundary while paused.
+        player.seek(to: 0.2)
+        let revision = player.seekRevision
+        let returned = await until { self.player.seekRevision > revision }
+        XCTAssertTrue(returned)
+        XCTAssertEqual(player.lyricPlaybackTime, 0.2, accuracy: 0.08)
+        XCTAssertEqual(LyricsParser.activeIndex(in: lyrics, at: player.lyricPlaybackTime), 0)
+        XCTAssertFalse(player.isPlaying)
+    }
+
     func testMediaServicesResetPreservesPositionWithoutAutoplay() async {
         player.play(track, in: [track, track])
         player.pause(immediate: true)

@@ -9,6 +9,7 @@ import Observation
     private(set) var elapsed: Double = 0
     private(set) var duration: Double = 0
     private(set) var lines: [LyricLine] = []
+    private(set) var seekRevision = 0
     var errorMessage: String?
     private(set) var sleepPlan: SleepPlan?
     var sleepDeadline: Date? { sleepPlan?.deadline }
@@ -159,18 +160,19 @@ import Observation
         return false
     }
     func seek(to value: Double) {
-        guard value.isFinite else { return }
+        guard value.isFinite, player.currentItem != nil else { return }
         elapsed = min(max(0, value), max(duration, 0))
         let token = UUID()
         pendingSeek = token
-        player.seek(to: CMTime(seconds: elapsed, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] finished in
+        seekRevision &+= 1
+        player.seek(to: CMTime(seconds: elapsed, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.pendingSeek == token else { return }
                 self.pendingSeek = nil
-                if finished {
-                    let actual = self.player.currentTime().seconds
-                    if actual.isFinite { self.elapsed = max(0, actual) }
-                }
+                // Reconcile with the audio clock even when the engine interrupts a seek.
+                let actual = self.player.currentTime().seconds
+                if actual.isFinite { self.elapsed = max(0, actual) }
+                self.seekRevision &+= 1
                 self.persistQueue()
                 self.updateNowPlaying()
             }

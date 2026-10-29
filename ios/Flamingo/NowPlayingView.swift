@@ -6,8 +6,6 @@ private enum PlayerPanel { case artwork, lyrics, queue }
 
 struct NowPlayingView: View {
     var presentation: PlayerPresentation
-    var sharedArtworkAvailable: Bool
-    var sharedMetadataAvailable: Bool
     var safeArea: EdgeInsets
     var transitionTravel: CGFloat
     var close: () -> Void
@@ -54,7 +52,6 @@ struct NowPlayingView: View {
                         portraitContent(size: proxy.size)
                     }
                 }.frame(maxWidth: 1000).frame(maxWidth: .infinity)
-                    .modifier(PlayerControlsReveal(progress: presentation.progress))
                     .accessibilityHidden(!presentation.isPresented)
             }.coordinateSpace(name: "player-content")
                 .animation(reduceMotion ? nil : PlayerMotion.panel, value: panel)
@@ -120,22 +117,12 @@ struct NowPlayingView: View {
         case .artwork:
             GeometryReader { geometry in
                 let side = max(1, min(geometry.size.width, geometry.size.height))
-                Group {
-                    if reduceMotion {
-                        ArtworkView(track: player.current, radius: 16)
-                    } else {
-                        ArtworkView(track: player.current, radius: 16)
-                            .opacity(presentation.phase == .expanded && !sharedArtworkAvailable ? 1 : 0)
-                    }
-                }
-                .frame(width: side, height: side)
-                .background { GeometryReader { cover in
-                    Color.clear.preference(key: PlayerArtworkFrameKey.self, value: cover.frame(in: .named("player-content")))
-                } }
-                .scaleEffect(reduceMotion || player.isPlaying ? 1 : 0.94)
-                .animation(reduceMotion ? nil : PlayerMotion.artwork, value: player.isPlaying)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle()).gesture(dismissGesture)
+                ArtworkView(track: player.current, radius: 16)
+                    .frame(width: side, height: side)
+                    .scaleEffect(reduceMotion || player.isPlaying ? 1 : 0.94)
+                    .animation(reduceMotion ? nil : PlayerMotion.artwork, value: player.isPlaying)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle()).gesture(dismissGesture)
             }
         case .lyrics:
             LyricsView(isVisible: presentation.isPresented).transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1 : 0.98)))
@@ -148,22 +135,15 @@ struct NowPlayingView: View {
             if panel != .artwork {
                 ArtworkView(track: player.current, radius: 10)
                     .frame(width: UIScreen.main.bounds.width * 0.167, height: UIScreen.main.bounds.width * 0.167)
-                    .opacity(reduceMotion || presentation.phase == .expanded && !sharedArtworkAvailable ? 1 : 0)
-                    .background { GeometryReader { cover in
-                        Color.clear.preference(key: PlayerArtworkFrameKey.self, value: cover.frame(in: .named("player-content")))
-                    } }
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(player.current?.title ?? "").font(panel == .artwork ? MusicTypography.title : .system(size: 19, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.7)
-                    .background { PlayerMetadataMeasurement(mini: false, title: true) }
-                    .opacity(sharedMetadataAvailable ? 0 : 1)
                 Menu {
                     if let track = player.current {
                         ForEach(library.artists(for: track), id: \.self) { name in Button(name) { library.navigationTarget = .artist(name) } }
                     }
                 } label: { Text(player.current?.artist ?? "").font(panel == .artwork ? MusicTypography.body : .system(size: 18)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
-                        .background { PlayerMetadataMeasurement(mini: false, title: false) }
-                        .opacity(sharedMetadataAvailable ? 0 : 1) }
+                }
             }.frame(maxWidth: .infinity, alignment: .leading)
             Button { if let track = player.current { library.toggleFavorite(track.id); PlayerHaptics.shared.discreteSelection() } } label: {
                 Image(systemName: player.current?.isFavorite == true ? "star.fill" : "star")
@@ -295,11 +275,19 @@ struct LyricsView: View {
     @State private var following = true
     @State private var lastScrollTarget: Int?
     @GestureState private var dragging = false
-    private var activeIndex: Int? { LyricsParser.activeIndex(in: player.lines, at: player.elapsed) }
-    private var activeLines: Set<Int> { LyricsParser.activeIndices(in: player.lines, at: player.elapsed) }
+    @GestureState private var touching = false
+    @Environment(\.scenePhase) private var scenePhase
     var body: some View {
-        let focused = activeLines
-        Group {
+        TimelineView(.animation(minimumInterval: reduceMotion ? 0.1 : 1.0 / 60,
+                                paused: !isVisible || !player.isPlaying || scenePhase != .active)) { _ in
+            content(at: player.lyricPlaybackTime)
+        }
+    }
+
+    private func content(at time: Double) -> some View {
+        let activeIndex = LyricsParser.activeIndex(in: player.lines, at: time)
+        let focused = LyricsParser.activeIndices(in: player.lines, at: time)
+        return Group {
             if !isVisible {
                 Color.clear
             } else if player.lines.isEmpty {
@@ -318,12 +306,13 @@ struct LyricsView: View {
                                         player.seek(to: line.start); following = true
                                         scroll(reader, to: line.id, force: true, seeking: true)
                                     } label: {
-                                        LyricRowContent(line: line, active: active,
+                                        LyricRowContent(line: line, active: active, time: time,
+                                                        browsing: touching || dragging || !following,
                                                         showTranslation: showTranslation, size: lyricSize,
                                                         lineSpacing: lineSpacing, reduceMotion: reduceMotion)
-                                    }.buttonStyle(.plain).id(line.id)
-                                        .blur(radius: upcomingBlur(for: line, active: active))
-                                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.45), value: upcomingBlur(for: line, active: active))
+                                    }.buttonStyle(LyricPressStyle()).id(line.id)
+                                        .blur(radius: restingBlur(for: line, active: active, focus: activeIndex))
+                                        .animation(reduceMotion ? nil : .easeInOut(duration: touching || dragging ? 0.14 : 0.38), value: restingBlur(for: line, active: active, focus: activeIndex))
                                         .accessibilityIdentifier("lyric-\(line.id)")
                                         .accessibilityLabel(line.text.isEmpty ? "间奏" : line.text)
                                         .accessibilityHint("跳到 \(PlaybackTime.label(line.start))")
@@ -331,9 +320,22 @@ struct LyricsView: View {
                             }.padding(.top, proxy.size.height * 0.3).padding(.bottom, proxy.size.height * 0.65).padding(.horizontal, 4)
                         }.scrollIndicators(.hidden).accessibilityIdentifier("lyrics-scroll")
                             .mask { LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.08), .init(color: .black, location: 0.86), .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom) }
+                            .simultaneousGesture(DragGesture(minimumDistance: 0)
+                                .updating($touching) { _, state, _ in state = true })
                             .simultaneousGesture(DragGesture(minimumDistance: 3)
                                 .updating($dragging) { _, state, _ in state = true }
                                 .onChanged { _ in following = false })
+                            .task(id: touching) {
+                                guard !touching, !following else { return }
+                                do { try await Task.sleep(for: .seconds(3)) } catch { return }
+                                guard !Task.isCancelled, !dragging else { return }
+                                following = true
+                                scroll(reader, to: LyricsParser.activeIndex(in: player.lines, at: player.lyricPlaybackTime) ?? 0, force: true)
+                            }
+                            .onChange(of: player.seekRevision) { _, _ in
+                                following = true
+                                scroll(reader, to: activeIndex ?? 0, force: true, seeking: true)
+                            }
                             .onChange(of: activeIndex) { old, index in
                                 if following, !dragging, let index {
                                     scroll(reader, to: index, seeking: abs(index - (old ?? index)) > 1)
@@ -363,10 +365,11 @@ struct LyricsView: View {
             }
         }
     }
-    private func upcomingBlur(for line: LyricLine, active: Bool) -> CGFloat {
-        guard following, !dragging, !active, line.start > player.elapsed else { return 0 }
-        let lead = line.start - player.elapsed
-        return CGFloat(min(5, max(0, lead - 0.6) * 0.65))
+    private func restingBlur(for line: LyricLine, active: Bool, focus: Int?) -> CGFloat {
+        guard following, !touching, !dragging, !active else { return 0 }
+        // Blur both sides by visual line distance, independent of long musical gaps.
+        let distance = abs(line.id - (focus ?? 0))
+        return min(4.5, 0.8 + CGFloat(distance) * 0.85)
     }
 
     private func scroll(_ reader: ScrollViewProxy, to id: Int, force: Bool = false, seeking: Bool = false) {
@@ -377,27 +380,39 @@ struct LyricsView: View {
     }
 }
 
+private struct LyricPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.white.opacity(configuration.isPressed ? 0.12 : 0))
+                    .padding(.horizontal, -10).padding(.vertical, -8)
+            }
+    }
+}
+
 private struct LyricRowContent: View {
     var line: LyricLine
     var active: Bool
+    var time: Double
+    var browsing: Bool
     var showTranslation: Bool
     var size: CGFloat
     var lineSpacing: CGFloat
     var reduceMotion: Bool
-    @Environment(PlayerStore.self) private var player
     private var right: Bool { line.agent == "v2" }
 
     var body: some View {
         VStack(alignment: right ? .trailing : .leading, spacing: 8) {
             if !line.words.isEmpty {
-                KaraokeLine(line: line, active: active, reduceMotion: reduceMotion,
+                KaraokeLine(line: line, active: active, time: time, browsing: browsing,
                             size: size, lineSpacing: lineSpacing, right: right)
             } else if line.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                LyricCountdown(line: line, time: player.elapsed, active: active)
+                LyricCountdown(line: line, time: time, active: active)
             } else {
                 Text(line.text).font(MusicTypography.lyric(size: size))
                     .lineSpacing(lineSpacing)
-                    .foregroundStyle(.white.opacity(active ? 1 : 0.42))
+                    .foregroundStyle(.white.opacity(active || browsing && time >= line.start ? 1 : 0.42))
                     .multilineTextAlignment(right ? .trailing : .leading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -437,41 +452,36 @@ private struct LyricCountdown: View {
 private struct KaraokeLine: View {
     var line: LyricLine
     var active: Bool
-    var reduceMotion: Bool
+    var time: Double
+    var browsing: Bool
     var size: CGFloat
     var lineSpacing: CGFloat
     var right: Bool
-    @Environment(PlayerStore.self) private var player
-    @Environment(\.scenePhase) private var scenePhase
-    @Environment(PlayerPresentation.self) private var presentation
     var body: some View {
-        TimelineView(.animation(minimumInterval: reduceMotion ? 0.1 : nil,
-                                paused: !active || !player.isPlaying || scenePhase != .active || !presentation.isPresented)) { _ in
-            let time = player.lyricPlaybackTime
-            LyricFlowLayout(lineSpacing: lineSpacing, right: right) {
-                ForEach(Array(line.words.enumerated()), id: \.offset) { index, word in
-                    let nextStart = index + 1 < line.words.count ? line.words[index + 1].start : line.end
-                    let end = word.end ?? nextStart
-                    let progress = highlightProgress(start: word.start, end: end, time: time)
-                    Text(word.text).foregroundStyle(.white.opacity(active ? 0.4 : 0.42))
-                        .lineSpacing(lineSpacing)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .overlay(alignment: .leading) {
-                            Text(word.text).foregroundStyle(.white).lineSpacing(lineSpacing)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .mask(alignment: .leading) {
-                                    GeometryReader { geometry in Rectangle().frame(width: geometry.size.width * progress) }
-                                }
-                        }
-                        .transaction { $0.animation = nil }
-                }
+        LyricFlowLayout(lineSpacing: lineSpacing, right: right) {
+            ForEach(Array(line.words.enumerated()), id: \.offset) { index, word in
+                let nextStart = index + 1 < line.words.count ? line.words[index + 1].start : line.end
+                let end = word.end ?? nextStart
+                let progress = highlightProgress(start: word.start, end: end, time: time)
+                Text(word.text).foregroundStyle(.white.opacity(active ? 0.4 : 0.42))
+                    .lineSpacing(lineSpacing)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .overlay(alignment: .leading) {
+                        Text(word.text).foregroundStyle(.white).lineSpacing(lineSpacing)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .mask(alignment: .leading) {
+                                GeometryReader { geometry in Rectangle().frame(width: geometry.size.width * progress) }
+                            }
+                    }
+                    .transaction { $0.animation = nil }
             }
-            .font(MusicTypography.lyric(size: size))
-        }.accessibilityElement(children: .ignore).accessibilityLabel(line.text)
+        }
+        .font(MusicTypography.lyric(size: size))
+        .accessibilityElement(children: .ignore).accessibilityLabel(line.text)
     }
 
     private func highlightProgress(start: Double, end: Double?, time: Double) -> Double {
-        guard active, time >= start else { return 0 }
+        guard active || browsing, time >= start else { return 0 }
         // An untimed word end is not a license to invent a karaoke duration.
         guard let end, end > start else { return 1 }
         return min(1, max(0, (time - start) / (end - start)))
