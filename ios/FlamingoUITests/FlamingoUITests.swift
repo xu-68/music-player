@@ -47,7 +47,7 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["song-demo-0.wav"].exists)
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["tab-home"].tap()
-        app.buttons["设置"].tap()
+        app.buttons["Settings"].tap()
         let scanButton = app.buttons["scan-music"]
         for _ in 0..<8 where !scanButton.isHittable { app.swipeUp() }
         scanButton.tap()
@@ -59,7 +59,7 @@ final class FlamingoUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["song-demo-0.wav"].exists)
         app.navigationBars.buttons.firstMatch.tap()
         app.buttons["tab-home"].tap()
-        app.buttons["设置"].tap()
+        app.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         let automatic = app.switches["auto-scan-music"]
         let scan = app.buttons["scan-music"]
@@ -144,7 +144,7 @@ final class FlamingoUITests: XCTestCase {
         capture("17-system-typography-lyrics")
         app.buttons["close-player"].tap()
         app.buttons["tab-home"].tap()
-        app.buttons["设置"].tap()
+        app.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["字体粗细"].exists)
         XCTAssertFalse(app.buttons["ExtraBold"].exists)
@@ -200,7 +200,7 @@ final class FlamingoUITests: XCTestCase {
         app.buttons["close-player"].tap()
         let returned = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: app.buttons["mini-player"])
         XCTAssertEqual(XCTWaiter.wait(for: [returned], timeout: 5), .completed)
-        app.buttons["设置"].tap()
+        app.buttons["Settings"].tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
         capture("11-settings")
     }
